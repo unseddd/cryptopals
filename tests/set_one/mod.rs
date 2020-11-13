@@ -88,7 +88,7 @@ fn challenge_five() {
 
 #[test]
 fn challenge_six() {
-    use std::io::{Read, Write};
+    use std::io::Write;
 
     use crate::common::{to_hex, read_lines};
 
@@ -96,21 +96,14 @@ fn challenge_six() {
     use cryptopals::language::{
         build_english_trigrams,
         guess_single_xor_key_tri,
-        matches_trigram_distribution,
-        observe_trigrams
     };
 
-    let mut file = std::fs::File::open("tests/res/set1_challenge6.txt").unwrap();
     // File for troubleshooting this challenge
     // Contains an encryption with known plaintext and key
-    //let mut file = std::fs::File::open("tests/res/set1_own_crypt.txt").unwrap();
+    //let buf = read_lines("tests/res/set1_own_crypt.txt").unwrap();
 
-    let mut buf: Vec<u8> = vec![0u8; file.metadata().unwrap().len() as usize];
-    file.read_exact(&mut buf).unwrap();
-
-    let b64: Vec<u8> = buf.iter().filter(|&&x| x != 0x0a).map(|&x| x).collect();
     let buf = read_lines("tests/res/set1_challenge6.txt");
-    let ciphertext = from_base64(&b64).unwrap();
+    let ciphertext = from_base64(&buf).unwrap();
 
     let trigrams = build_english_trigrams();
 
@@ -175,11 +168,9 @@ fn challenge_seven() {
     let key = b"YELLOW SUBMARINE";
 
     let buf = read_lines("tests/res/set1_challenge7.txt");
-    let mut ciphertext = from_base64(&buf).unwrap();
+    let ciphertext = from_base64(&buf).unwrap();
 
-    assert_eq!(ciphertext.len() % craes::aes::BLOCK_LEN, 0);
-
-    let plaintext = craes::ecb::aes_inv_128_ecb(&ciphertext, &key).unwrap();
+    let plaintext = craes::ecb::decrypt(&ciphertext, &key).unwrap();
 
     let mut out_file = std::fs::File::create("tests/res/set1_challenge7.out").unwrap();
     out_file.write_all(&plaintext).unwrap();

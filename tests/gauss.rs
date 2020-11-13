@@ -1,6 +1,6 @@
 mod common;
 
-use cryptopals::{gauss::*, hamming::hamming_distance};
+use cryptopals::gauss::*;
 
 fn print_matrix(matrix: &[u8]) {
     println!("[");
