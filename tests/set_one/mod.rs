@@ -90,13 +90,10 @@ fn challenge_five() {
 fn challenge_six() {
     use std::io::Write;
 
-    use crate::common::{to_hex, read_lines};
+    use crate::common::{read_lines, to_hex};
 
     use cryptopals::hamming::{get_key_blocks, guess_key_length_multi};
-    use cryptopals::language::{
-        build_english_trigrams,
-        guess_single_xor_key_tri,
-    };
+    use cryptopals::language::{build_english_trigrams, guess_single_xor_key_tri};
 
     // File for troubleshooting this challenge
     // Contains an encryption with known plaintext and key
@@ -162,8 +159,8 @@ fn own_crypt() {
 
 #[test]
 fn challenge_seven() {
-    use std::io::Write;
     use crate::common::read_lines;
+    use std::io::Write;
 
     let key = b"YELLOW SUBMARINE";
 

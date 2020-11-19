@@ -1,8 +1,10 @@
+#[allow(dead_code)]
 pub fn to_hex(hex: &[u8]) -> String {
     hex.iter().map(|x| format!("{:02x}", x)).collect()
 }
 
 // read lines from a file into a buffer
+#[allow(dead_code)]
 pub fn read_lines(path: &str) -> Vec<u8> {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
