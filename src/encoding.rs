@@ -146,7 +146,9 @@ pub fn from_base64(bytes: &[u8]) -> Result<Vec<u8>, Error> {
 
     let pad_len = if bytes[bytes_len - 2..] == b"=="[..] {
         2
-    } else if bytes[bytes_len - 1] == 0x3d /* "=" */ {
+    } else if bytes[bytes_len - 1] == 0x3d
+    /* "=" */
+    {
         1
     } else {
         0
@@ -187,6 +189,19 @@ pub fn xor(left: &[u8], right: &[u8]) -> Result<Vec<u8>, Error> {
         res.push(i ^ j);
     }
     Ok(res)
+}
+
+/// XOR fixed-length byte slices
+///
+/// errors: returns Error on unequal lengths
+pub fn xor_equals(left: &mut [u8], right: &[u8]) -> Result<(), Error> {
+    if left.len() != right.len() {
+        return Err(Error::XORLength);
+    }
+    for (i, j) in left.iter_mut().zip(right.iter()) {
+        *i ^= *j;
+    }
+    Ok(())
 }
 
 /// XOR a byte slice with a key byte

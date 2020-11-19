@@ -31,8 +31,8 @@ fn challenge_nine() {
     padded = pkcs7::pad(&msg);
 
     // check when 15 padding bytes needed for next block
-    assert_eq!(padded.len(), 2*aes::BLOCK_LEN);
-    assert_eq!(padded[aes::BLOCK_LEN+1..], [15_u8; 15]);
+    assert_eq!(padded.len(), 2 * aes::BLOCK_LEN);
+    assert_eq!(padded[aes::BLOCK_LEN + 1..], [15_u8; 15]);
 }
 
 #[test]
@@ -50,7 +50,8 @@ fn challenge_ten() {
 
     // Decrypt and write to a file, then read the mad skillz of the iceman
     let mut out = std::fs::File::create("tests/res/set2_challenge10.out").unwrap();
-    out.write_all(&cbc::decrypt(&ciphertext, &key, &iv).unwrap()).unwrap();
+    out.write_all(&cbc::decrypt(&ciphertext, &key, &iv).unwrap())
+        .unwrap();
 }
 
 #[test]
@@ -71,8 +72,8 @@ fn challenge_eleven() {
 
 #[test]
 fn challenge_twelve() {
-    use std::io::Write;
     use rand::thread_rng;
+    use std::io::Write;
 
     use cryptopals::oracle;
 
@@ -85,7 +86,10 @@ fn challenge_twelve() {
 
     // Detect the oracle is encrypting using ECB mode
     let ecb_out = oracle::ecb_oracle(&det_msg, &key).unwrap();
-    assert_eq!(oracle::detect_oracle(&ecb_out).unwrap(), oracle::AesMode::Ecb);
+    assert_eq!(
+        oracle::detect_oracle(&ecb_out).unwrap(),
+        oracle::AesMode::Ecb
+    );
 
     // Decrypt the unknown text a byte at a time
     let decrypted = oracle::decrypt_ecb_oracle_simple(&key).unwrap();
@@ -102,8 +106,8 @@ fn profile_for(email: &str) -> Result<(Vec<u8>, [u8; aes::KEY_LEN_128]), String>
 }
 
 fn encrypt_profile(profile: &[u8]) -> Result<(Vec<u8>, [u8; aes::KEY_LEN_128]), String> {
-    use rand::thread_rng;
     use cryptopals::oracle::gen_rand_key;
+    use rand::thread_rng;
 
     let key = gen_rand_key(&mut thread_rng());
 
@@ -112,7 +116,10 @@ fn encrypt_profile(profile: &[u8]) -> Result<(Vec<u8>, [u8; aes::KEY_LEN_128]), 
     Ok((ciph, key))
 }
 
-fn decrypt_profile(ciphertext: &[u8], key: &[u8; aes::KEY_LEN_128]) -> Result<user::Profile, String> {
+fn decrypt_profile(
+    ciphertext: &[u8],
+    key: &[u8; aes::KEY_LEN_128],
+) -> Result<user::Profile, String> {
     let prof_buf = ecb::decrypt(ciphertext, key).map_err(|e| format!("decryption: {:?}", e))?;
     let unpadded = pkcs7::unpad(&prof_buf).map_err(|e| format!("padding: {:?}", e))?;
 
@@ -136,12 +143,18 @@ fn challenge_thirteen() {
     let copy = prof_ciph.clone();
 
     // remove the last block with the padded "user" string
-    for _i in 0..aes::BLOCK_LEN { prof_ciph.pop(); }
+    for _i in 0..aes::BLOCK_LEN {
+        prof_ciph.pop();
+    }
 
     // replace with the padded "admin" string
-    prof_ciph.extend_from_slice(&copy[aes::BLOCK_LEN..aes::BLOCK_LEN*2]);
+    prof_ciph.extend_from_slice(&copy[aes::BLOCK_LEN..aes::BLOCK_LEN * 2]);
 
-    let exp_profile = user::Profile{ email: prof_string.as_bytes().to_vec(), uid: 10, role: b"admin".to_vec() };
+    let exp_profile = user::Profile {
+        email: prof_string.as_bytes().to_vec(),
+        uid: 10,
+        role: b"admin".to_vec(),
+    };
     let profile = decrypt_profile(&prof_ciph, &key).unwrap();
 
     assert_eq!(profile, exp_profile);
@@ -182,7 +195,7 @@ fn challenge_sixteen() {
     use cryptopals::oracle;
 
     // 32 bytes | user-data | 43 bytes
-    // 
+    //
     // + = arbitrary byte
     // : = 0x3a (";" ^ 1)
     // < = 0x3c ("=" ^ 1)
@@ -190,8 +203,7 @@ fn challenge_sixteen() {
     // ++++++++++++++++ :admin<true:++++
     // ---------------- ----------------
     // 0     6    11
-    let attempt = core::str::from_utf8(&[0x41_u8; 16]).unwrap().to_string()
-        + ":admin<true:++++";
+    let attempt = core::str::from_utf8(&[0x41_u8; 16]).unwrap().to_string() + ":admin<true:++++";
 
     let mut cbc_output = oracle::cbc_oracle(attempt.as_bytes()).unwrap();
 
@@ -201,5 +213,4 @@ fn challenge_sixteen() {
     cbc_output.ciphertext[43] ^= 1;
 
     assert!(oracle::cbc_oracle_found_admin(&cbc_output).unwrap());
-
 }

@@ -1,7 +1,5 @@
 use alloc::vec::Vec;
 
-use craes::ecb;
-
 #[derive(Debug)]
 pub enum Error {
     InvalidEmailKey,
@@ -13,8 +11,8 @@ pub enum Error {
     KeyNotFound,
 }
 
-const AMP_KEY: u8 = 0x26;  // '&'
-const EQ_KEY: u8 = 0x3d;  // '='
+const AMP_KEY: u8 = 0x26; // '&'
+const EQ_KEY: u8 = 0x3d; // '='
 
 fn find_key(buf: &[u8], key: u8) -> Result<usize, Error> {
     for (i, b) in buf.iter().enumerate() {
@@ -50,7 +48,11 @@ impl Profile {
             return Err(Error::InvalidEmailValue);
         }
 
-        Ok(Profile{ email: email.to_vec(), uid: 10, role: b"user".to_vec()})
+        Ok(Profile {
+            email: email.to_vec(),
+            uid: 10,
+            role: b"user".to_vec(),
+        })
     }
 
     /// Deserialize a profile string
@@ -94,7 +96,11 @@ impl Profile {
 
         let role = Self::deserialize_role(&encoded[1..])?;
 
-        Ok(Profile{ email: email, uid: uid, role: role })
+        Ok(Profile {
+            email: email,
+            uid: uid,
+            role: role,
+        })
     }
 
     fn deserialize_email(email_str: &[u8]) -> Result<Vec<u8>, Error> {
@@ -176,11 +182,12 @@ impl Profile {
 
 impl core::fmt::Display for Profile {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f,
-               "email={}&uid={}&role={}",
-               core::str::from_utf8(self.email.as_ref()).unwrap(),
-               self.uid,
-               core::str::from_utf8(self.role.as_ref()).unwrap()
+        write!(
+            f,
+            "email={}&uid={}&role={}",
+            core::str::from_utf8(self.email.as_ref()).unwrap(),
+            self.uid,
+            core::str::from_utf8(self.role.as_ref()).unwrap()
         )
     }
 }
@@ -192,7 +199,11 @@ mod tests {
     #[test]
     fn check_profile() {
         let profile = Profile::from_str("email=valid@email.org&uid=420&role=user").unwrap();
-        let exp_profile = Profile{ email: b"valid@email.org".to_vec(), uid: 420, role: b"user".to_vec() };
+        let exp_profile = Profile {
+            email: b"valid@email.org".to_vec(),
+            uid: 420,
+            role: b"user".to_vec(),
+        };
 
         assert_eq!(profile, exp_profile);
     }

@@ -122,18 +122,19 @@ pub fn guess_single_xor_key_tri(
 }
 
 pub fn guess_single_xor_key_simple(ciphertext: &[u8]) -> Result<Attempt, Error> {
-    let mut res = Attempt{ key: 0, delta: 1420.69 };
+    let mut res = Attempt {
+        key: 0,
+        delta: 1420.69,
+    };
 
     for attempt in 0x00..=0xff {
         let dec = xor_key(&ciphertext, attempt).map_err(|e| Error::Encoding(e))?;
 
-        let score = dec.iter().fold(1420_u64, |delta, b| {
-            match *b {
-                0x61..=0x7a => delta.saturating_sub(1),
-                0x41..=0x5a => delta,
-                0x21..=0x40 => delta + 1,
-                _ => delta,
-            }
+        let score = dec.iter().fold(1420_u64, |delta, b| match *b {
+            0x61..=0x7a => delta.saturating_sub(1),
+            0x41..=0x5a => delta,
+            0x21..=0x40 => delta + 1,
+            _ => delta,
         });
 
         if score < res.delta as u64 {
