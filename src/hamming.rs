@@ -52,12 +52,16 @@ pub fn guess_key_length(bytes: &[u8], start_len: usize) -> Result<usize, Error> 
 }
 
 /// Convenience function to return multiple (num_guesses) key lengths
-pub fn guess_key_length_multi(bytes: &[u8], start_len: usize, num_guesses: usize) -> Result<Vec<usize>, Error> {
+pub fn guess_key_length_multi(
+    bytes: &[u8],
+    start_len: usize,
+    num_guesses: usize,
+) -> Result<Vec<usize>, Error> {
     let mut res = Vec::with_capacity(num_guesses);
 
     res.push(guess_key_length(&bytes, start_len)?);
 
-    // guess the next key length starting with the previously guessed key length + 1 
+    // guess the next key length starting with the previously guessed key length + 1
     for i in 1..num_guesses {
         res.push(guess_key_length(&bytes, res[i - 1] + 1)?);
     }
