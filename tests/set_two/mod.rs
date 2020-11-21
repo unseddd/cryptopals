@@ -10,21 +10,22 @@ fn challenge_nine() {
 
     // check when 15 padding bytes needed
     assert_eq!(padded.len(), aes::BLOCK_LEN);
-    assert_eq!(padded[1..], [15_u8; 15][..]);
+    assert_eq!(padded[1..], [15_u8; 15]);
 
     msg.extend_from_slice(b"ELLOW ");
     padded = pkcs7::pad(&msg);
 
     // check when 8 padding bytes needed
     assert_eq!(padded.len(), aes::BLOCK_LEN);
-    assert_eq!(padded[7..], [9_u8; 9][..]);
+    assert_eq!(padded[7..], [9_u8; 9]);
 
     msg.extend_from_slice(b"SUBMARINE");
     padded = pkcs7::pad(&msg);
 
-    // check when no padding bytes needed
-    assert_eq!(padded.len(), aes::BLOCK_LEN);
-    assert_eq!(padded, msg);
+    // check when full block of padding bytes needed
+    assert_eq!(padded.len(), aes::BLOCK_LEN * 2);
+    assert_eq!(padded[..aes::BLOCK_LEN], msg[..]);
+    assert_eq!(padded[aes::BLOCK_LEN..], [16_u8; 16]);
 
     msg.extend_from_slice(b"!");
     padded = pkcs7::pad(&msg);
