@@ -174,17 +174,17 @@ pub fn detect_block_size() -> Result<usize, Error> {
 
 /// Decrypt ECB oracle one byte at a time (simple)
 pub fn decrypt_ecb_oracle_simple(key: &[u8; aes::BLOCK_LEN]) -> Result<Vec<u8>, Error> {
-    use hashbrown::HashMap;
-
     let mut res = Vec::with_capacity(UNKNOWN_LEN);
-
-    // Build a dictionary of all possible ciphertexts, up to the unknown message length
-    let mut dictionary: HashMap<Vec<u8>, u8> = HashMap::new();
 
     for ciph_idx in 1..UNKNOWN_LEN {
         // the current block number
         let block = ciph_idx / aes::BLOCK_LEN;
         let attempt_len = aes::BLOCK_LEN * (block + 1);
+
+        // supply next attempt that is ciph_idx bytes short
+        // places the next byte of the unknown plaintext at the end of our string
+        let short_attempt = vec![0x41; attempt_len - ciph_idx];
+        let short_ciph = ecb_oracle(&short_attempt, &key).unwrap()[..attempt_len].to_vec();
 
         // decrypt next byte
         for b in 0x00..=0xff {
@@ -199,17 +199,12 @@ pub fn decrypt_ecb_oracle_simple(key: &[u8; aes::BLOCK_LEN]) -> Result<Vec<u8>, 
             // get next ciphertext from the ECB oracle
             let ciph = ecb_oracle(&attempt, &key).unwrap()[..attempt_len].to_vec();
 
-            // add the guess entry to the dictionary
-            dictionary.insert(ciph, b);
+            // found the byte that matches the next byte of the target text
+            if ciph == short_ciph {
+                res.push(b);
+                break;
+            }
         }
-
-        // supply next attempt that is ciph_idx bytes short
-        // places the next byte of the unknown plaintext at the end of our string
-        let attempt = vec![0x41; attempt_len - ciph_idx];
-        let ciph = ecb_oracle(&attempt, &key).unwrap()[..attempt_len].to_vec();
-
-        // add the entry in our dictionary as the next decrypted byte
-        res.push(dictionary[&ciph]);
     }
 
     Ok(res)
@@ -296,12 +291,7 @@ pub fn guess_prefix_len(oracle: &RandEcbOracle) -> Result<usize, Error> {
 
 /// Decrypt ECB oracle one byte at a time (hard)
 pub fn decrypt_ecb_oracle_hard(oracle: &RandEcbOracle) -> Result<Vec<u8>, Error> {
-    use hashbrown::HashMap;
-
     let mut res = Vec::with_capacity(UNKNOWN_LEN);
-
-    // Build a dictionary of all possible ciphertexts, up to the unknown message length
-    let mut dictionary: HashMap<Vec<u8>, u8> = HashMap::new();
 
     // guess the prefix length to start solving at the next block
     let prefix_len = guess_prefix_len(&oracle)?;
@@ -313,6 +303,11 @@ pub fn decrypt_ecb_oracle_hard(oracle: &RandEcbOracle) -> Result<Vec<u8>, Error>
         let block = ciph_idx / aes::BLOCK_LEN;
         // add extra padding to account for the prefix
         let attempt_len = aes::BLOCK_LEN * (block + 1) + extra_len;
+
+        // supply next attempt that is ciph_idx bytes short
+        // places the next byte of the unknown plaintext at the end of our string
+        let short_attempt = vec![0x41; attempt_len - ciph_idx];
+        let short_ciph = oracle.encrypt(&short_attempt).unwrap()[full_prefix..prefix_len+attempt_len].to_vec();
 
         // decrypt next byte
         for b in 0x00..=0xff {
@@ -327,17 +322,12 @@ pub fn decrypt_ecb_oracle_hard(oracle: &RandEcbOracle) -> Result<Vec<u8>, Error>
             // get next ciphertext from the ECB oracle, ignore prefix block(s)
             let ciph = oracle.encrypt(&attempt).unwrap()[full_prefix..prefix_len+attempt_len].to_vec();
 
-            // add the guess entry to the dictionary
-            dictionary.insert(ciph, b);
+            // found the byte that matches the next byte of the target text
+            if ciph == short_ciph {
+                res.push(b);
+                break;
+            }
         }
-
-        // supply next attempt that is ciph_idx bytes short
-        // places the next byte of the unknown plaintext at the end of our string
-        let attempt = vec![0x41; attempt_len - ciph_idx];
-        let ciph = oracle.encrypt(&attempt).unwrap()[full_prefix..prefix_len+attempt_len].to_vec();
-
-        // add the entry in our dictionary as the next decrypted byte
-        res.push(dictionary[&ciph]);
     }
 
     Ok(res)
