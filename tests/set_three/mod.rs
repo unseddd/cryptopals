@@ -146,3 +146,33 @@ fn challenge_twenty() {
     let (ciphertexts, xor_blocks) = encrypt_ctr_plaintexts(&plaintexts);
     decrypt_ctr_ciphertexts(&ciphertexts, &xor_blocks, "tests/res/set3_challenge20.out");
 }
+
+#[test]
+fn challenge_twenty_one() {
+    use cryptopals::mersenne::{mt19937, mt19937_64};
+
+    let expected_nums: [u32; 16] = [
+        3499211612, 581869302, 3890346734, 3586334585, 545404204, 4161255391, 3922919429,
+        949333985, 2715962298, 1323567403, 418932835, 2350294565, 1196140740, 809094426,
+        2348838239, 4264392720,
+    ];
+
+    let mut generator = mt19937::Mt19937::new(5489);
+
+    for expected in expected_nums.iter() {
+        assert_eq!(*expected, generator.extract_number());
+    }
+
+    let expected_nums_64: [u64; 16] = [
+        14514284786278117030, 4620546740167642908, 13109570281517897720, 17462938647148434322,
+        355488278567739596, 7469126240319926998, 4635995468481642529, 418970542659199878,
+        9604170989252516556, 6358044926049913402, 5058016125798318033, 10349215569089701407,
+        2583272014892537200, 10032373690199166667, 9627645531742285868, 15810285301089087632,
+    ];
+
+    let mut generator_64 = mt19937_64::Mt19937::new(5489);
+
+    for expected in expected_nums_64.iter() {
+        assert_eq!(*expected, generator_64.extract_number());
+    }
+}

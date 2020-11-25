@@ -17,6 +17,10 @@ pub mod hamming;
 /// Tools for analyzing language statistics in ciphertexts and plaintext
 pub mod language;
 
+/// Mersenne Twister (32- and 64-bit) based on Wikipedia pseudocode,
+/// and the original algorithm from Matsumoto and Nishimura
+pub mod mersenne;
+
 /// Encryption oracle and detection of which AES mode the oracle used for encryption
 pub mod oracle;
 
