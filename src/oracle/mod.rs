@@ -49,8 +49,8 @@ pub enum Error {
     InvalidLength,
     InvalidPosition,
     InvalidRange,
-    Ecb(craes::ecb::Error),
-    Cbc(craes::cbc::Error),
+    Ecb(craes::Error),
+    Cbc(craes::Error),
     NoDecryptionFound,
 }
 
