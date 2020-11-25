@@ -37,8 +37,8 @@ pub enum Error {
     Base64(encoding::Error),
     InvalidLength,
     InvalidRange,
-    Ecb(ecb::Error),
-    Cbc(cbc::Error),
+    Ecb(craes::Error),
+    Cbc(craes::Error),
 }
 
 /// Generate a random AES-128 key
