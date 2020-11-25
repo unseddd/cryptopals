@@ -2,14 +2,14 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
 use craes::{aes, cbc, pkcs7};
 
 use crate::encoding;
 
+use super::{gen_rand_iv, gen_rand_key, Error};
 use super::{EQUAL, SEMICOLON};
-use super::{Error, gen_rand_iv, gen_rand_key};
 
 /// Ciphertext and key material output by the CBC oracle
 pub struct CbcOracleOutput {
@@ -429,4 +429,3 @@ mod tests {
         assert_eq!(exp_pad[..], pt[aes::BLOCK_LEN..]);
     }
 }
-

@@ -2,18 +2,18 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use rand::{Rng, RngCore};
 use rand::rngs::ThreadRng;
+use rand::{Rng, RngCore};
 
 use craes::aes;
 
 use crate::encoding;
 
-mod ecb;
 mod cbc;
+mod ecb;
 
-pub use ecb::*;
 pub use cbc::*;
+pub use ecb::*;
 
 // Upper limit for random ECB oracle padding (chal. 12)
 const RAND_LIMIT_HI: usize = 10;

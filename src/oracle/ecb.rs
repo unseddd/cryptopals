@@ -2,14 +2,14 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
-use craes::{aes, ecb, cbc, pkcs7};
+use craes::{aes, cbc, ecb, pkcs7};
 
 use crate::encoding;
 
-use super::{RAND_PREFIX_HI, RAND_PREFIX_LO, UNKNOWN_LEN, UNKNOWN_B64_LEN};
-use super::{AesMode, Error, gen_rand_bytes, add_random_bytes, gen_rand_iv, gen_rand_key};
+use super::{add_random_bytes, gen_rand_bytes, gen_rand_iv, gen_rand_key, AesMode, Error};
+use super::{RAND_PREFIX_HI, RAND_PREFIX_LO, UNKNOWN_B64_LEN, UNKNOWN_LEN};
 
 // Unknown target text (Base64-encoded)
 const UNKNOWN_TARGET: &[u8; UNKNOWN_B64_LEN] = b"Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK";

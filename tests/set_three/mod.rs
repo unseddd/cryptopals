@@ -2,8 +2,59 @@ use std::io::Write;
 
 use craes::ctr;
 
+use cryptopals::encoding::from_base64;
 use cryptopals::oracle;
-use cryptopals::encoding;
+
+fn encrypt_ctr_plaintexts(plaintexts: &Vec<Vec<u8>>) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
+    use cryptopals::oracle::gen_rand_key;
+    use rand::thread_rng;
+
+    let len = plaintexts.len();
+
+    let mut ciphertexts: Vec<Vec<u8>> = Vec::with_capacity(len);
+    let mut xor_blocks: Vec<Vec<u8>> = Vec::with_capacity(len);
+
+    let key = gen_rand_key(&mut thread_rng());
+    let nonce = 0_u64;
+    let mut count = 0_u64;
+
+    for plaintext in plaintexts.iter() {
+        let ciphertext = ctr::encrypt(&plaintext, &key, nonce, &mut count, &ctr::Endian::Little);
+        // add each byte in the ciphertext to its corresponding xor block
+        for (i, byte) in ciphertext.iter().enumerate() {
+            if i >= xor_blocks.len() {
+                xor_blocks.resize(i + 1, Vec::new());
+            }
+            xor_blocks[i].push(*byte);
+        }
+        ciphertexts.push(ciphertext);
+
+        // reset counter to generate same keystream for the next encryption
+        count = 0;
+    }
+
+    (ciphertexts, xor_blocks)
+}
+
+fn decrypt_ctr_ciphertexts(ciphertexts: &Vec<Vec<u8>>, xor_blocks: &Vec<Vec<u8>>, file_name: &str) {
+    use cryptopals::language::{build_english_trigrams, guess_single_xor_key_tri};
+
+    let mut key: Vec<u8> = Vec::new();
+
+    let trigrams = build_english_trigrams();
+
+    for block in xor_blocks.iter() {
+        let guess = guess_single_xor_key_tri(&block, &trigrams).unwrap();
+        key.push(guess.key);
+    }
+
+    let mut out = std::fs::File::create(file_name).unwrap();
+    for ciphertext in ciphertexts.iter() {
+        let msg = craes::xor(&ciphertext, &key[..ciphertext.len()]).unwrap();
+        out.write_all(&msg).unwrap();
+        out.write_all(&[0x0a]).unwrap();
+    }
+}
 
 #[test]
 fn challenge_seventeen() {
@@ -18,7 +69,10 @@ fn challenge_seventeen() {
 
 #[test]
 fn challenge_eighteen() {
-    let ciphertext = encoding::from_base64(b"L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==".as_ref()).unwrap();
+    let ciphertext = from_base64(
+        b"L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==".as_ref(),
+    )
+    .unwrap();
     let key = b"YELLOW SUBMARINE";
     let nonce = 0_u64;
     let mut count = 0_u64;
@@ -31,14 +85,6 @@ fn challenge_eighteen() {
 
 #[test]
 fn challenge_nineteen() {
-    use rand::thread_rng;
-
-    use cryptopals::oracle::gen_rand_key;
-    use cryptopals::encoding::from_base64;
-    use cryptopals::language::{build_english_trigrams, guess_single_xor_key_tri};
-
-    const NUM_PLAINTEXTS: usize = 40;
-
     let plaintexts = vec![
         from_base64(b"SSBoYXZlIG1ldCB0aGVtIGF0IGNsb3NlIG9mIGRheQ==".as_ref()).unwrap(),
         from_base64(b"Q29taW5nIHdpdGggdml2aWQgZmFjZXM=".as_ref()).unwrap(),
@@ -82,41 +128,21 @@ fn challenge_nineteen() {
         from_base64(b"QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=".as_ref()).unwrap(),
     ];
 
-    let mut ciphertexts: Vec<Vec<u8>> = Vec::with_capacity(NUM_PLAINTEXTS);
-    let mut xor_blocks:  Vec<Vec<u8>> = Vec::with_capacity(NUM_PLAINTEXTS);
+    let (ciphertexts, xor_blocks) = encrypt_ctr_plaintexts(&plaintexts);
+    decrypt_ctr_ciphertexts(&ciphertexts, &xor_blocks, "tests/res/set3_challenge19.out");
+}
 
-    let trigrams = build_english_trigrams();
+#[test]
+fn challenge_twenty() {
+    use crate::common::read_multi_lines;
 
-    let key = gen_rand_key(&mut thread_rng());
-    let nonce = 0_u64;
-    let mut count = 0_u64;
+    let b64s = read_multi_lines("tests/res/set3_challenge20.txt");
 
-    for plaintext in plaintexts.iter() {
-        let ciphertext = ctr::encrypt(&plaintext, &key, nonce, &mut count, &ctr::Endian::Little);
-        // add each byte in the ciphertext to its corresponding xor block
-        for (i, byte) in ciphertext.iter().enumerate() {
-            if i >= xor_blocks.len() {
-                xor_blocks.resize(i + 1, Vec::new());
-            }
-            xor_blocks[i].push(*byte);
-        }
-        ciphertexts.push(ciphertext);
+    let plaintexts = b64s
+        .iter()
+        .map(|b| from_base64(b.as_ref()).unwrap())
+        .collect();
 
-        // reset counter to generate same keystream for the next encryption
-        count = 0;
-    }
-
-    let mut key: Vec<u8> = Vec::new();
-
-    for block in xor_blocks.iter() {
-        let guess = guess_single_xor_key_tri(&block, &trigrams).unwrap();
-        key.push(guess.key);
-    }
-
-    let mut out = std::fs::File::create("tests/res/set3_challenge19.out").unwrap();
-    for ciphertext in ciphertexts.iter() {
-        let msg = craes::xor(&ciphertext, &key[..ciphertext.len()]).unwrap();
-        out.write_all(&msg).unwrap();
-        out.write_all(&[0x0a]).unwrap();
-    }
+    let (ciphertexts, xor_blocks) = encrypt_ctr_plaintexts(&plaintexts);
+    decrypt_ctr_ciphertexts(&ciphertexts, &xor_blocks, "tests/res/set3_challenge20.out");
 }
