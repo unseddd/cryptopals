@@ -159,20 +159,75 @@ fn challenge_twenty_one() {
 
     let mut generator = mt19937::Mt19937::new(5489);
 
-    for expected in expected_nums.iter() {
-        assert_eq!(*expected, generator.extract_number());
+    let mut extracted_nums = [0_u32; 16];
+
+    for (i, expected) in expected_nums.iter().enumerate() {
+        extracted_nums[i] = generator.extract_number();
+        assert_eq!(*expected, extracted_nums[i]);
     }
 
     let expected_nums_64: [u64; 16] = [
-        14514284786278117030, 4620546740167642908, 13109570281517897720, 17462938647148434322,
-        355488278567739596, 7469126240319926998, 4635995468481642529, 418970542659199878,
-        9604170989252516556, 6358044926049913402, 5058016125798318033, 10349215569089701407,
-        2583272014892537200, 10032373690199166667, 9627645531742285868, 15810285301089087632,
+        14514284786278117030,
+        4620546740167642908,
+        13109570281517897720,
+        17462938647148434322,
+        355488278567739596,
+        7469126240319926998,
+        4635995468481642529,
+        418970542659199878,
+        9604170989252516556,
+        6358044926049913402,
+        5058016125798318033,
+        10349215569089701407,
+        2583272014892537200,
+        10032373690199166667,
+        9627645531742285868,
+        15810285301089087632,
     ];
+    let mut extracted_nums_64 = [0_u64; 16];
 
     let mut generator_64 = mt19937_64::Mt19937::new(5489);
 
-    for expected in expected_nums_64.iter() {
-        assert_eq!(*expected, generator_64.extract_number());
+    for (i, expected) in expected_nums_64.iter().enumerate() {
+        extracted_nums_64[i] = generator_64.extract_number();
+        assert_eq!(*expected, extracted_nums_64[i]);
+    }
+}
+
+#[test]
+fn challenge_twenty_two() {
+    use std::time::SystemTime;
+
+    use rand::{Rng, thread_rng};
+
+    use cryptopals::mersenne::{mt19937, recover_seed};
+
+    let time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u32;
+
+    let mut generator = mt19937::Mt19937::new(time);
+
+    let rand_num = generator.extract_number();
+
+    // simulate waiting a random number of seconds
+    let wait_secs = thread_rng().gen_range::<u32, u32, u32>(40, 100_000);
+    let sim_now = time + wait_secs;
+
+    assert_eq!(recover_seed(rand_num, sim_now), time);
+}
+
+#[test]
+fn challenge_twenty_three() {
+    use rand::{RngCore, thread_rng};
+
+    use cryptopals::mersenne::{mt19937, clone};
+
+    let mut generator = mt19937::Mt19937::new(thread_rng().next_u32());
+    let mut clone_rng = clone(&mut generator).unwrap();
+
+    for _i in 0..mt19937::N {
+        assert_eq!(clone_rng.extract_number(), generator.extract_number());
     }
 }
