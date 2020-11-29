@@ -57,6 +57,27 @@ pub fn recover_seed(rand_num: u32, current_time: u32) -> u32 {
     0
 }
 
+/// Recover seed knowing it is a u16 value
+pub fn recover_seed_u16(rand_num: u32) -> u16 {
+    let untempered = recover_state(rand_num);
+
+    let mut state = [0_u32; N];
+    for i in 1..=65535 {
+        state[0] = i;
+        for j in 1..=M {
+            Mt19937::k_distribute(&mut state, j);
+        }
+        Mt19937::twist(&mut state, 0);
+
+        if state[0] == untempered {
+            return i as u16;
+        }
+    }
+
+    // seed can never be zero, so use this as an error value
+    0
+}
+
 /// Recover the MT19937 state used to generate the given random number
 pub fn recover_state(rand_num: u32) -> u32 {
     // invert the TEMPER_L transformation

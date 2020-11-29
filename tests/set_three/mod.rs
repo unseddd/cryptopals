@@ -20,13 +20,9 @@ fn encrypt_ctr_plaintexts(plaintexts: &Vec<Vec<u8>>) -> (Vec<Vec<u8>>, Vec<Vec<u
 
     for plaintext in plaintexts.iter() {
         let ciphertext = ctr::encrypt(&plaintext, &key, nonce, &mut count, &ctr::Endian::Little);
-        // add each byte in the ciphertext to its corresponding xor block
-        for (i, byte) in ciphertext.iter().enumerate() {
-            if i >= xor_blocks.len() {
-                xor_blocks.resize(i + 1, Vec::new());
-            }
-            xor_blocks[i].push(*byte);
-        }
+
+        get_ctr_xor_blocks(&ciphertext, &mut xor_blocks);
+
         ciphertexts.push(ciphertext);
 
         // reset counter to generate same keystream for the next encryption
@@ -36,7 +32,28 @@ fn encrypt_ctr_plaintexts(plaintexts: &Vec<Vec<u8>>) -> (Vec<Vec<u8>>, Vec<Vec<u
     (ciphertexts, xor_blocks)
 }
 
+// Add each byte in the ciphertext to its corresponding xor block
+fn get_ctr_xor_blocks(ciphertext: &Vec<u8>, xor_blocks: &mut Vec<Vec<u8>>) {
+    for (i, byte) in ciphertext.iter().enumerate() {
+        if i >= xor_blocks.len() {
+            xor_blocks.resize(i + 1, Vec::new());
+        }
+        xor_blocks[i].push(*byte);
+    }
+}
+
 fn decrypt_ctr_ciphertexts(ciphertexts: &Vec<Vec<u8>>, xor_blocks: &Vec<Vec<u8>>, file_name: &str) {
+    let key = get_ctr_keystream(&xor_blocks);
+
+    let mut out = std::fs::File::create(file_name).unwrap();
+    for ciphertext in ciphertexts.iter() {
+        let msg = craes::xor(&ciphertext, &key[..ciphertext.len()]).unwrap();
+        out.write_all(&msg).unwrap();
+        out.write_all(&[0x0a]).unwrap();
+    }
+}
+
+fn get_ctr_keystream(xor_blocks: &Vec<Vec<u8>>) -> Vec<u8> {
     use cryptopals::language::{build_english_trigrams, guess_single_xor_key_tri};
 
     let mut key: Vec<u8> = Vec::new();
@@ -48,12 +65,7 @@ fn decrypt_ctr_ciphertexts(ciphertexts: &Vec<Vec<u8>>, xor_blocks: &Vec<Vec<u8>>
         key.push(guess.key);
     }
 
-    let mut out = std::fs::File::create(file_name).unwrap();
-    for ciphertext in ciphertexts.iter() {
-        let msg = craes::xor(&ciphertext, &key[..ciphertext.len()]).unwrap();
-        out.write_all(&msg).unwrap();
-        out.write_all(&[0x0a]).unwrap();
-    }
+    key
 }
 
 #[test]
@@ -198,9 +210,9 @@ fn challenge_twenty_one() {
 fn challenge_twenty_two() {
     use std::time::SystemTime;
 
-    use rand::{Rng, thread_rng};
+    use rand::{thread_rng, Rng};
 
-    use cryptopals::mersenne::{mt19937, recover_seed};
+    use cryptopals::mersenne::{mt19937, recovery};
 
     let time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -215,19 +227,140 @@ fn challenge_twenty_two() {
     let wait_secs = thread_rng().gen_range::<u32, u32, u32>(40, 100_000);
     let sim_now = time + wait_secs;
 
-    assert_eq!(recover_seed(rand_num, sim_now), time);
+    assert_eq!(recovery::recover_seed(rand_num, sim_now), time);
 }
 
 #[test]
 fn challenge_twenty_three() {
-    use rand::{RngCore, thread_rng};
+    use rand::{thread_rng, RngCore};
 
-    use cryptopals::mersenne::{mt19937, clone};
+    use cryptopals::mersenne::{mt19937, recovery};
 
     let mut generator = mt19937::Mt19937::new(thread_rng().next_u32());
-    let mut clone_rng = clone(&mut generator).unwrap();
+    let mut clone_rng = recovery::clone(&mut generator).unwrap();
 
     for _i in 0..mt19937::N {
         assert_eq!(clone_rng.extract_number(), generator.extract_number());
+    }
+}
+
+#[test]
+fn challenge_twenty_four_a() {
+    use core::convert::TryInto;
+
+    use rand::{thread_rng, Rng};
+
+    use cryptopals::mersenne::{recovery, stream};
+
+    // Since the key recovery is probabilistic, more ciphertexts == more accuracy
+    let num_ciphertexts = 169;
+
+    let a_s = b"AAAAAAAAAA";
+    let mut rng = thread_rng();
+
+    let count = 0;
+
+    let mut plaintexts: Vec<Vec<u8>> = Vec::with_capacity(num_ciphertexts);
+    let mut ciphertexts: Vec<Vec<u8>> = Vec::with_capacity(num_ciphertexts);
+    let mut xor_blocks: Vec<Vec<u8>> = Vec::with_capacity(num_ciphertexts);
+
+    // Create a MT19937 stream cipher with a random 16-bit "key"
+    let key = rng.gen_range::<u16, u16, u16>(1, 65535);
+    let cipher = stream::Cipher::new(key);
+
+    // Generate ciphertexts for the breaking
+    for _i in 0..num_ciphertexts {
+        let rand_len = rng.gen_range::<usize, usize, usize>(5, 32);
+        let mut rand_bytes = vec![0_u8; rand_len];
+
+        // fill with random characters in A-Z range
+        for byte in rand_bytes.iter_mut() {
+            *byte = rng.gen_range::<u8, u8, u8>(0x61, 0x7a);
+        }
+
+        rand_bytes.extend_from_slice(a_s.as_ref());
+
+        let ciphertext = cipher.encrypt(&rand_bytes, count);
+
+        plaintexts.push(rand_bytes);
+
+        get_ctr_xor_blocks(&ciphertext, &mut xor_blocks);
+
+        ciphertexts.push(ciphertext);
+    }
+
+    let keystream = get_ctr_keystream(&xor_blocks);
+
+    // Sanity check to ensure the first generator output is recovered accurately
+    for (plaintext, ciphertext) in plaintexts.iter().zip(ciphertexts.iter()) {
+        let recovered_plaintext = craes::xor(&ciphertext, &keystream[..ciphertext.len()]).unwrap();
+        assert_eq!(recovered_plaintext[..4], plaintext[..4]);
+    }
+
+    let first_output = u32::from_le_bytes(keystream[..4].try_into().unwrap());
+
+    assert_eq!(recovery::recover_seed_u16(first_output), key);
+}
+
+#[test]
+fn challenge_twenty_four_b() {
+    use core::convert::TryInto;
+
+    use std::time::SystemTime;
+
+    use rand::{thread_rng, Rng};
+
+    use cryptopals::mersenne::{password_token, recovery};
+
+    let time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u32;
+
+    let token = password_token::generate(time);
+
+    // simulate waiting a random number of seconds
+    let wait_secs = thread_rng().gen_range::<u32, u32, u32>(40, 100_000);
+    let sim_now = time + wait_secs;
+
+    let rand_num = u32::from_le_bytes(token[..4].try_into().unwrap());
+
+    assert_eq!(recovery::recover_seed(rand_num, sim_now), time);
+}
+
+#[test]
+fn challenge_twenty_four_c() {
+    use std::time::SystemTime;
+
+    use rand::{thread_rng, Rng};
+
+    use cryptopals::mersenne::password_token;
+
+    let time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as u32;
+
+    let token = password_token::generate(time);
+
+    let mut bad_tokens: Vec<[u8; 16]> = Vec::with_capacity(4);
+
+    let mut rng = thread_rng();
+
+    // create random "tokens" filled with garbage
+    for _i in 0..4 {
+        let mut bad_token = [0_u8; 16];
+        rng.fill(&mut bad_token);
+        bad_tokens.push(bad_token);
+    }
+
+    // simulate waiting a random number of seconds
+    let wait_secs = rng.gen_range::<u32, u32, u32>(40, 100_000);
+    let sim_now = time + wait_secs;
+
+    assert!(password_token::test_valid_token(&token, sim_now));
+
+    for bad_token in bad_tokens.iter() {
+        assert_eq!(password_token::test_valid_token(bad_token, sim_now), false);
     }
 }
