@@ -2,6 +2,9 @@
 
 extern crate alloc;
 
+/// Tools for AES-128-CTR related challenges
+pub mod ctr;
+
 /// Utilities for encoding/decoding
 pub mod encoding;
 
