@@ -2,6 +2,9 @@
 
 extern crate alloc;
 
+/// Tools for AES-128-CTR related challenges
+pub mod ctr;
+
 /// Utilities for encoding/decoding
 pub mod encoding;
 
@@ -16,6 +19,9 @@ pub mod hamming;
 
 /// Tools for analyzing language statistics in ciphertexts and plaintext
 pub mod language;
+
+/// Tools for calculation Message Authentication Codes (MACs)
+pub mod mac;
 
 /// Mersenne Twister (32- and 64-bit) based on Wikipedia pseudocode,
 /// and the original algorithm from Matsumoto and Nishimura
