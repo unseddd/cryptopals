@@ -20,3 +20,21 @@ fn challenge_twenty_five() {
 
     assert_eq!(recovered_plaintext, plaintext);
 }
+
+#[test]
+fn challenge_twenty_six() {
+    use cryptopals::ctr::bitflip;
+
+    let bitflipper = bitflip::BitFlipper::new();
+    // bit-flipped target string
+    // when target positions are XORed with one, results in the target string
+    let user_data = b":admin<true:";
+
+    let mut ciphertext = bitflipper.encrypt(user_data.as_ref());
+
+    for &pos in [32, 38, 43].iter() {
+        ciphertext[pos] ^= 1;
+    }
+
+    assert!(bitflipper.found_admin(&ciphertext));
+}
