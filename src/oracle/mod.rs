@@ -51,6 +51,7 @@ pub enum Error {
     InvalidRange,
     Ecb(craes::Error),
     Cbc(craes::Error),
+    CbcHighAscii(Vec<u8>),
     NoDecryptionFound,
 }
 

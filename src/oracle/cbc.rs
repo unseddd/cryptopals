@@ -52,6 +52,9 @@ pub fn cbc_oracle(user_data: &[u8]) -> Result<CbcOracleOutput, Error> {
     })
 }
 
+/// Decrypt the CBC oracle output, and search for the target string ";admin=true;"
+///
+/// Return true if the target string is found, false otherwise
 pub fn cbc_oracle_found_admin(output: &CbcOracleOutput) -> Result<bool, Error> {
     let plaintext =
         cbc::decrypt(&output.ciphertext, &output.key, &output.iv).map_err(|e| Error::Cbc(e))?;
@@ -65,6 +68,22 @@ pub fn cbc_oracle_found_admin(output: &CbcOracleOutput) -> Result<bool, Error> {
     }
 
     Ok(false)
+}
+
+/// Decrypt the CBC oracle output
+///
+/// Return an error containing the plaintext if high ASCII values (> 0x3d) are found
+pub fn cbc_oracle_detect_high_ascii(output: &CbcOracleOutput) -> Result<(), Error> {
+    let plaintext =
+        cbc::decrypt(&output.ciphertext, &output.key, &output.iv).map_err(|e| Error::Cbc(e))?;
+
+    for byte in plaintext.iter() {
+        if *byte > 0x3d {
+            return Err(Error::CbcHighAscii(plaintext));
+        }
+    }
+
+    Ok(())
 }
 
 const CBC_NUM_PLAINTEXTS: usize = 10;
