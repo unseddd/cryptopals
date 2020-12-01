@@ -20,6 +20,9 @@ pub mod hamming;
 /// Tools for analyzing language statistics in ciphertexts and plaintext
 pub mod language;
 
+/// Tools for calculation Message Authentication Codes (MACs)
+pub mod mac;
+
 /// Mersenne Twister (32- and 64-bit) based on Wikipedia pseudocode,
 /// and the original algorithm from Matsumoto and Nishimura
 pub mod mersenne;

@@ -78,3 +78,42 @@ fn challenge_twenty_seven() {
 
     assert_eq!(found_key.as_slice(), output.key.as_ref());
 }
+
+#[test]
+fn challenge_twenty_eight() {
+    use cryptopals::mac::Sha1SecretMac;
+
+    let mut msg = b"real or random?".to_vec();
+
+    for i in 0..=255 {
+        let i_macer = Sha1SecretMac::from_key(i);
+        let i_mac = i_macer.mac(msg.as_ref()).unwrap();
+
+        for j in 0..=255 {
+            if i != j {
+                let j_macer = Sha1SecretMac::from_key(j);
+                let j_mac = j_macer.mac(msg.as_ref()).unwrap();
+
+                // "prove" that we can't find a collision using a different key
+                assert!(j_mac != i_mac);
+            }
+        }
+    }
+
+    let orig_msg = msg.clone();
+    let macer = Sha1SecretMac::new();
+    let mac = macer.mac(msg.as_ref()).unwrap();
+
+    for i in 0..=255 {
+        if orig_msg[0] != i {
+            msg[0] = i;
+        } else {
+            msg[1] = i;
+        }
+
+        let new_mac = macer.mac(msg.as_ref()).unwrap();
+
+        // "prove" that we can't find a collision using a different message
+        assert!(new_mac != mac);
+    }
+}
