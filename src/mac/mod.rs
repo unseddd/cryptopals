@@ -7,3 +7,8 @@ pub use sha1::*;
 mod md4;
 
 pub use md4::*;
+
+// HMAC tools
+mod hmac;
+
+pub use hmac::*;

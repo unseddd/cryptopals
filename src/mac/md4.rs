@@ -30,7 +30,7 @@ impl Md4SecretMac {
 
         let mut md4 = bmd4::Md4::new();
         md4.update(&input)?;
-        md4.finalize() 
+        md4.finalize()
     }
 
     /// Calculates a secret-prefix MAC over the given message
@@ -52,4 +52,3 @@ impl Md4SecretMac {
         md4.finalize_insecure(total_len)
     }
 }
-
