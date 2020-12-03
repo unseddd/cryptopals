@@ -165,3 +165,45 @@ fn challenge_twenty_nine() {
     // verify it matches the forged MAC
     assert_eq!(forge_mac, new_mac);
 }
+
+#[test]
+fn challenge_thirty() {
+    use cryptopals::mac::Md4SecretMac;
+
+    let key = 0x4_2069_1337_u128;
+    let orig_msg = b"comment1=cooking%20MCs;userdata=foo;comment2=%20like%20a%20pound%20of%20bacon";
+
+    // for convenience, create the full message to get the proper length needed for padding
+    let mut full_msg = key.to_le_bytes().to_vec();
+    full_msg.extend_from_slice(orig_msg.as_ref());
+
+    let macer = Md4SecretMac::from_key(key);
+
+    // simulate getting a secret-prefix MAC of the original message
+    let orig_mac = macer.mac(orig_msg.as_ref()).unwrap();
+
+    // attacker appends forged message, and calculates a new signature without knowledge of the key
+    let forge_msg = b";admin=true";
+
+    // copy the original message and padding, without the secret key
+    // represents info available to the attacker
+    let mut full_forge_msg = orig_msg.to_vec();
+
+    let mut msg_padding = bmd4::Md4::pad_message(&full_msg).unwrap();
+
+    msg_padding.extend_from_slice(forge_msg.as_ref());
+
+    full_forge_msg.extend_from_slice(&msg_padding);
+
+    // forge a MAC with the SHA-1 state fixed at the result of the original MAC
+    let total_forge_len = ((core::mem::size_of_val(&key) + full_forge_msg.len()) * 8) as u64;
+    let forge_mac = macer
+        .mac_from_mac(forge_msg.as_ref(), &orig_mac, total_forge_len)
+        .unwrap();
+
+    // simulate supplying the full forged message to the original MACer
+    let new_mac = macer.mac(&full_forge_msg).unwrap();
+
+    // verify it matches the forged MAC
+    assert_eq!(forge_mac, new_mac);
+}
