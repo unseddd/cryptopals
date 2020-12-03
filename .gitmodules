@@ -4,3 +4,6 @@
 [submodule "isha1"]
 	path = isha1
 	url = https://github.com/unseddd/isha1.git
+[submodule "bmd4"]
+	path = bmd4
+	url = https://github.com/unseddd/bmd4.git
