@@ -5,6 +5,9 @@ extern crate alloc;
 /// Tools for AES-128-CTR related challenges
 pub mod ctr;
 
+/// Tools for Diffie-Hellman secret sharing
+pub mod dh;
+
 /// Utilities for encoding/decoding
 pub mod encoding;
 
