@@ -159,3 +159,31 @@ fn challenge_thirty_five() {
         assert!(res.is_zero());
     }
 }
+
+#[test]
+fn challenge_thirty_six() {
+    use cryptopals::mac::srp::{SecureRemotePassword, SrpClient, SrpServer};
+
+    let mut srp_server = SrpServer::new();
+    let mut srp_client = SrpClient::new();
+
+    srp_client.set_email(b"such@much.email".as_ref()).unwrap();
+    srp_client
+        .set_password(b"really strong password".as_ref())
+        .unwrap();
+
+    srp_server
+        .generate_password_exponent(srp_client.password())
+        .unwrap();
+    let srv_big_b = srp_server.generate_public_key().unwrap();
+    let salt = srp_server.salt();
+
+    let client_challenge = srp_client.generate_challenge(&srv_big_b, salt).unwrap();
+    let cli_big_a = srp_client.generate_public_key().unwrap();
+
+    let success = srp_server
+        .validate_challenge(&cli_big_a, &client_challenge)
+        .unwrap();
+
+    assert!(success);
+}
