@@ -249,3 +249,94 @@ fn challenge_thirty_seven() {
 
     assert_eq!(success_big_psq, SUCCESSFUL_LOGIN);
 }
+
+#[test]
+fn challenge_thirty_eight() {
+    use num::Zero;
+
+    use cryptopals::mac::srp::{SecureRemotePassword, SimpleSrpClient, SimpleSrpServer};
+    use cryptopals::mac::srp::{DICTIONARY, SUCCESSFUL_LOGIN};
+
+    let mut srp_client = SimpleSrpClient::new();
+
+    srp_client.set_email(b"some@much.email".as_ref()).unwrap();
+
+    // choose random password from the dictionary
+    // somewhat contrived, but see notes in the source for details
+    let pass_idx = thread_rng().gen_range::<usize, usize, usize>(0, DICTIONARY.len());
+    srp_client
+        .set_password(DICTIONARY[pass_idx].as_ref())
+        .unwrap();
+
+    let mut srp_server = SimpleSrpServer::new();
+    srp_server
+        .register(srp_client.email(), srp_client.password())
+        .unwrap();
+
+    let server_pubkey = srp_server.generate_public_key().unwrap();
+
+    let client_challenge = srp_client
+        .generate_challenge(&server_pubkey, srp_server.salt(), srp_server.nonce())
+        .unwrap();
+
+    let cli_pubkey = srp_client.generate_public_key().unwrap();
+
+    // verify successful login
+    let success = srp_server
+        .login(srp_client.email(), &cli_pubkey, &client_challenge)
+        .unwrap();
+
+    assert_eq!(success, SUCCESSFUL_LOGIN);
+
+    // verify login fails with invalid public key
+    let res = srp_server.login(srp_client.email(), &Zero::zero(), &client_challenge);
+
+    assert!(res.is_err());
+
+    let mut mitm_server = SimpleSrpServer::new();
+
+    // set parameters to make v (sha(salt||password)) easy to crack
+    // i.e. u = 1, b = 1, salt = 0
+    // s.t. S = (A * v ** 1) ** 1 % P
+    //        = (A * v) % P
+    //      and
+    //      v = SHA-256([0; 16] || password)
+    mitm_server.set_crack_parameters();
+
+    // simulate the client being fed MitM parameters for challenge generation
+    let mitm_challenge = srp_client
+        .generate_challenge(
+            &mitm_server.generate_public_key().unwrap(),
+            mitm_server.salt(),
+            mitm_server.nonce(),
+        )
+        .unwrap();
+
+    // crack the password at the MitM server
+    let cracked_pass = mitm_server
+        .crack_password(&cli_pubkey, &mitm_challenge)
+        .unwrap();
+
+    // login to the original server with the cracked password
+    let mut mitm_client = SimpleSrpClient::new();
+
+    // yeah, we MitMed the email, too...
+    mitm_client.set_email(srp_client.email()).unwrap();
+    mitm_client.set_password(&cracked_pass).unwrap();
+
+    // generate a challenge using cracked + MitMed params
+    let cracked_challenge = mitm_client
+        .generate_challenge(&server_pubkey, srp_server.salt(), srp_server.nonce())
+        .unwrap();
+
+    // verify login is successful
+    let success = srp_server
+        .login(
+            mitm_client.email(),
+            &mitm_client.generate_public_key().unwrap(),
+            &cracked_challenge,
+        )
+        .unwrap();
+
+    assert_eq!(success, SUCCESSFUL_LOGIN);
+}

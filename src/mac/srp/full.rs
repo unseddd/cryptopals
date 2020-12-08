@@ -7,25 +7,8 @@ use rand::{thread_rng, Rng};
 use crate::dh;
 use crate::mac::hmac_sha256;
 
-// Shared constant used to generate/validate client challenges
-const K: u8 = 3;
-
-/// Successful login message
-pub const SUCCESSFUL_LOGIN: &'static str = "Welcome to the System!";
-
-/// Failed login message
-pub const FAILED_LOGIN: &'static str = "You hackin' muh shit, bruh?";
-
-/// Secure Remote Password errors
-#[derive(Debug)]
-pub enum Error {
-    Sha256(isha256::Error),
-    DiffieHellman(dh::Error),
-    AlreadyRegistered,
-    FailedLogin(&'static str),
-    InvalidEmail,
-    InvalidPassword,
-}
+use super::{Error, SecureRemotePassword};
+use super::{FAILED_LOGIN, K, SUCCESSFUL_LOGIN};
 
 /// Implementation of Secure Remote Password (SRP) server
 pub struct SrpServer {
@@ -33,21 +16,6 @@ pub struct SrpServer {
     password_exponent: BigUint,
     private_exponent: BigUint,
     email: Vec<u8>,
-}
-
-/// Common functionality between Secure Remote Password client and server
-pub trait SecureRemotePassword {
-    /// Create a new Secure Remote Password implementation
-    fn new() -> Self;
-
-    /// Generate the public key for constructing/validating the client challenge
-    fn generate_public_key(&self) -> Result<BigUint, Error>;
-
-    /// Get the email for the Secure Remote Password
-    fn email(&self) -> &[u8];
-
-    /// Set the email for the Secure Remote Password
-    fn set_email(&mut self, email: &[u8]) -> Result<(), Error>;
 }
 
 impl SecureRemotePassword for SrpServer {
@@ -90,21 +58,6 @@ impl SecureRemotePassword for SrpServer {
 }
 
 impl SrpServer {
-    /// Generate the `v` exponent from the provided password
-    ///
-    /// v = G**SHA-256(salt||password) % P
-    fn generate_password_exponent(&mut self, password: &[u8]) -> Result<(), Error> {
-        let mut input = self.salt.to_be_bytes().to_vec();
-        input.extend_from_slice(&password);
-
-        let xh = isha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
-        let x = BigUint::from_bytes_be(&xh);
-
-        self.password_exponent = dh::public_key(&x).map_err(|e| Error::DiffieHellman(e))?;
-
-        Ok(())
-    }
-
     /// Register a user with the SRP server
     pub fn register(&mut self, email: &[u8], password: &[u8]) -> Result<(), Error> {
         // mimic a server already having a registered user
@@ -134,6 +87,21 @@ impl SrpServer {
         } else {
             Err(Error::FailedLogin(FAILED_LOGIN))
         }
+    }
+
+    // Generate the `v` exponent from the provided password
+    //
+    // v = G**SHA-256(salt||password) % P
+    fn generate_password_exponent(&mut self, password: &[u8]) -> Result<(), Error> {
+        let mut input = self.salt.to_be_bytes().to_vec();
+        input.extend_from_slice(&password);
+
+        let xh = isha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
+        let x = BigUint::from_bytes_be(&xh);
+
+        self.password_exponent = dh::public_key(&x).map_err(|e| Error::DiffieHellman(e))?;
+
+        Ok(())
     }
 
     /// Get the randomly generated salt
@@ -191,6 +159,13 @@ impl SrpServer {
     }
 }
 
+/// Implementation of Secure Remote Password (SRP) client
+pub struct SrpClient {
+    private_exponent: BigUint,
+    email: Vec<u8>,
+    password: Vec<u8>,
+}
+
 impl SecureRemotePassword for SrpClient {
     /// Create a new Secure Remote Password generator with random salt
     fn new() -> Self {
@@ -223,13 +198,6 @@ impl SecureRemotePassword for SrpClient {
 
         Ok(())
     }
-}
-
-/// Implementation of Secure Remote Password (SRP) client
-pub struct SrpClient {
-    private_exponent: BigUint,
-    email: Vec<u8>,
-    password: Vec<u8>,
 }
 
 impl SrpClient {
