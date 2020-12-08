@@ -173,8 +173,9 @@ fn challenge_thirty_six() {
         .unwrap();
 
     srp_server
-        .generate_password_exponent(srp_client.password())
+        .register(srp_client.email(), srp_client.password())
         .unwrap();
+
     let srv_big_b = srp_server.generate_public_key().unwrap();
     let salt = srp_server.salt();
 
@@ -186,4 +187,65 @@ fn challenge_thirty_six() {
         .unwrap();
 
     assert!(success);
+}
+
+#[test]
+fn challenge_thirty_seven() {
+    use core::ops::Mul;
+    use num::bigint::BigUint;
+    use num::Zero;
+
+    use cryptopals::mac::hmac_sha256;
+    use cryptopals::mac::srp::{SecureRemotePassword, SrpClient, SrpServer, SUCCESSFUL_LOGIN};
+
+    let mut srp_server = SrpServer::new();
+    let mut srp_client = SrpClient::new();
+
+    srp_client.set_email(b"such@much.email".as_ref()).unwrap();
+    srp_client
+        .set_password(b"really strong password".as_ref())
+        .unwrap();
+
+    // register our brand new SRP client
+    srp_server
+        .register(srp_client.email(), srp_client.password())
+        .unwrap();
+
+    let salt = srp_server.salt();
+
+    // create the forged challenge for login bypass (*no password necessary*)
+    let cli_big_a: BigUint = Zero::zero();
+    let s_zero = isha256::Sha256::digest(&cli_big_a.to_bytes_be()).unwrap();
+    let client_challenge = hmac_sha256(s_zero.as_ref(), &salt.to_be_bytes()).unwrap();
+
+    // with known client email, login works like a charm
+    let success = srp_server
+        .login(srp_client.email(), &cli_big_a, &client_challenge)
+        .unwrap();
+
+    assert_eq!(success, SUCCESSFUL_LOGIN);
+
+    // set A to P, use the same challenge
+    let big_p = dh::p();
+    let success_big_p = srp_server
+        .login(srp_client.email(), &big_p, &client_challenge)
+        .unwrap();
+
+    assert_eq!(success_big_p, SUCCESSFUL_LOGIN);
+
+    // set A to P*2, use the same challenge
+    let big_pp = big_p.clone().mul(2_u32);
+    let success_big_pp = srp_server
+        .login(srp_client.email(), &big_pp, &client_challenge)
+        .unwrap();
+
+    assert_eq!(success_big_pp, SUCCESSFUL_LOGIN);
+
+    // set A to P^2, use the same challenge
+    let big_psq = big_p.pow(2);
+    let success_big_psq = srp_server
+        .login(srp_client.email(), &big_psq, &client_challenge)
+        .unwrap();
+
+    assert_eq!(success_big_psq, SUCCESSFUL_LOGIN);
 }

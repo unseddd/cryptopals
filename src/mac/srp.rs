@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::ops::{Add, Mul, Sub};
 use num::bigint::BigUint;
-use num::Integer;
+use num::{Integer, Zero};
 use rand::{thread_rng, Rng};
 
 use crate::dh;
@@ -10,11 +10,19 @@ use crate::mac::hmac_sha256;
 // Shared constant used to generate/validate client challenges
 const K: u8 = 3;
 
+/// Successful login message
+pub const SUCCESSFUL_LOGIN: &'static str = "Welcome to the System!";
+
+/// Failed login message
+pub const FAILED_LOGIN: &'static str = "You hackin' muh shit, bruh?";
+
 /// Secure Remote Password errors
 #[derive(Debug)]
 pub enum Error {
     Sha256(isha256::Error),
     DiffieHellman(dh::Error),
+    AlreadyRegistered,
+    FailedLogin(&'static str),
     InvalidEmail,
     InvalidPassword,
 }
@@ -85,7 +93,7 @@ impl SrpServer {
     /// Generate the `v` exponent from the provided password
     ///
     /// v = G**SHA-256(salt||password) % P
-    pub fn generate_password_exponent(&mut self, password: &[u8]) -> Result<(), Error> {
+    fn generate_password_exponent(&mut self, password: &[u8]) -> Result<(), Error> {
         let mut input = self.salt.to_be_bytes().to_vec();
         input.extend_from_slice(&password);
 
@@ -95,6 +103,37 @@ impl SrpServer {
         self.password_exponent = dh::public_key(&x).map_err(|e| Error::DiffieHellman(e))?;
 
         Ok(())
+    }
+
+    /// Register a user with the SRP server
+    pub fn register(&mut self, email: &[u8], password: &[u8]) -> Result<(), Error> {
+        // mimic a server already having a registered user
+        //
+        // basically a database/server with one user entry
+        if self.email.len() != 0 {
+            return Err(Error::AlreadyRegistered);
+        }
+
+        self.set_email(&email)?;
+        self.generate_password_exponent(&password)
+    }
+
+    /// Login to the SRP server
+    pub fn login(
+        &self,
+        email: &[u8],
+        client_public_key: &BigUint,
+        challenge: &[u8; isha256::DIGEST_LEN],
+    ) -> Result<&'static str, Error> {
+        if email != self.email {
+            return Err(Error::InvalidEmail);
+        }
+
+        if self.validate_challenge(&client_public_key, &challenge)? {
+            Ok(SUCCESSFUL_LOGIN)
+        } else {
+            Err(Error::FailedLogin(FAILED_LOGIN))
+        }
     }
 
     /// Get the randomly generated salt
@@ -116,6 +155,11 @@ impl SrpServer {
         client_public_key: &BigUint,
         challenge: &[u8; isha256::DIGEST_LEN],
     ) -> Result<bool, Error> {
+        // check that the client has been register and/or `generate_password_exponent` was called
+        if self.password_exponent.is_zero() {
+            return Err(Error::InvalidPassword);
+        }
+
         let big_b = self.generate_public_key()?;
 
         let mut big_a_b = client_public_key.to_bytes_be();
@@ -127,6 +171,7 @@ impl SrpServer {
 
         // S = ((A * v**u) ** b) % N
         let p = dh::p();
+
         let big_s = client_public_key
             .mul(&self.password_exponent.modpow(&u, &p))
             .modpow(&self.private_exponent, &p);
