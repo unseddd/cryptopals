@@ -340,3 +340,85 @@ fn challenge_thirty_eight() {
 
     assert_eq!(success, SUCCESSFUL_LOGIN);
 }
+
+#[test]
+fn challenge_thirty_nine() {
+    use num::bigint::BigUint;
+    use num::ToPrimitive;
+
+    // these are just a few examples to show RSA works
+    // see the unit tests in irsa for more
+
+    let a = BigUint::from_bytes_le(&[17]);
+    let b = BigUint::from_bytes_le(3120_u16.to_le_bytes().as_ref());
+    let c = irsa::inv_mod_slow(&a, &b).unwrap().to_u32().unwrap();
+
+    assert_eq!(c, 2753);
+
+    let pvt_key = irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap();
+    let pub_key = irsa::RsaPublicKey::from(&pvt_key);
+
+    let orig_text = b"0xIOnceLookedIntoTheBlackMaw...Wait,ThisIsn'tHex!";
+
+    let ciphertext = pub_key.encrypt(orig_text.as_ref()).unwrap();
+    let message = pvt_key.decrypt(&ciphertext).unwrap();
+
+    assert_eq!(message[..], orig_text[..]);
+}
+
+#[test]
+fn challenge_forty() {
+    use num::bigint::BigUint;
+    use num::Integer;
+
+    let n_0 = irsa::RsaPublicKey::from(&irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap());
+    let n_1 = irsa::RsaPublicKey::from(&irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap());
+    let n_2 = irsa::RsaPublicKey::from(&irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap());
+
+    // pretend we don't actually know this plaintext
+    let orig_text = b"no way they ever read this";
+
+    let c_0_buf = n_0.encrypt(orig_text.as_ref()).unwrap();
+    let c_1_buf = n_1.encrypt(orig_text.as_ref()).unwrap();
+    let c_2_buf = n_2.encrypt(orig_text.as_ref()).unwrap();
+
+    let mut c_0 = BigUint::from_bytes_le(&c_0_buf);
+    let mut c_1 = BigUint::from_bytes_le(&c_1_buf);
+    let mut c_2 = BigUint::from_bytes_le(&c_2_buf);
+
+    // m_s_0 = n_1 * n_2
+    let mut m_s_0 = n_1.n.clone();
+    m_s_0 *= &n_2.n;
+
+    // m_s_1 = n_0 * n_2
+    let mut m_s_1 = n_0.n.clone();
+    m_s_1 *= &n_2.n;
+
+    // m_s_2 = n_0 * n_1
+    let mut m_s_2 = n_0.n.clone();
+    m_s_2 *= &n_1.n;
+
+    // c_0 * m_s_0 * invmod(m_s_0, n_0)
+    c_0 *= &m_s_0;
+    c_0 *= irsa::inv_mod_slow(&m_s_0, &n_0.n).unwrap();
+
+    // c_1 * m_s_1 * invmod(m_s_1, n_1)
+    c_1 *= &m_s_1;
+    c_1 *= irsa::inv_mod_slow(&m_s_1, &n_1.n).unwrap();
+
+    // c_2 * m_s_2 * invmod(m_s_2, n_2)
+    c_2 *= &m_s_2;
+    c_2 *= irsa::inv_mod_slow(&m_s_2, &n_2.n).unwrap();
+
+    // sum the products
+    c_0 += &c_1;
+    c_0 += &c_2;
+
+    // n_012 = n_0 * n_1 * n_2
+    let mut n_012 = m_s_0.clone();
+    n_012 *= &n_0.n;
+
+    let res = c_0.mod_floor(&n_012).cbrt().to_bytes_le();
+
+    assert_eq!(res[..], orig_text[..]);
+}
