@@ -11,6 +11,7 @@ hashbrown = "0.9.0"
 libm = "0.2.1"
 num = { version = "0.3", default-features = false, features = ["alloc", "num-bigint"] }
 craes = { path = "craes" }
+irsa = { path = "irsa" }
 isha1 = { path = "isha1" }
 isha256 = { path = "isha256" }
 bmd4 = { path = "bmd4" }

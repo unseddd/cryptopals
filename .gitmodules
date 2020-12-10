@@ -7,3 +7,6 @@
 [submodule "bmd4"]
 	path = bmd4
 	url = https://github.com/unseddd/bmd4.git
+[submodule "irsa"]
+	path = irsa
+	url = https://github.com/unseddd/irsa.git
