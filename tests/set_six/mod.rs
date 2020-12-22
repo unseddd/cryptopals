@@ -3,6 +3,8 @@ use num::Integer;
 
 use rand::{thread_rng, Rng};
 
+use prime_math::InvMod;
+
 #[test]
 fn challenge_forty_one() {
     let msg = b"unreadable bytes";
@@ -25,7 +27,7 @@ fn challenge_forty_one() {
     let p_prime = sk.decrypt(&c_prime.to_bytes_be()).unwrap();
 
     // invS = 1/S mod N
-    let inv_s = irsa::inv_mod_slow(&bn_s, &pk.n).unwrap();
+    let inv_s = bn_s.invmod(&pk.n);
 
     // P = P'/S mod N
     let mut p = BigUint::from_bytes_be(&p_prime);
@@ -69,4 +71,8 @@ fn challenge_forty_two() {
         .verify_pkcs1_v1_5_insecure(forge_msg.as_ref(), &forge_sig, irsa::Hash::Sha1)
         .unwrap();
     assert_eq!(res, irsa::Verification::Consistent);
+}
+
+#[test]
+fn challenge_forty_three() {
 }

@@ -18,4 +18,4 @@ bmd4 = { git = "https://github.com/unseddd/bmd4", branch = "main" }
 rand = "0.7"
 
 [dev-dependencies]
-prime-math = { git = "https://github.com/unseddd/prime-math", branch = "main" }
+prime-math = { git = "https://github.com/unseddd/prime-math.git", branch = "main" }
