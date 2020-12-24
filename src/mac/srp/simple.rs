@@ -4,6 +4,8 @@ use num::bigint::BigUint;
 use num::Zero;
 use rand::{thread_rng, Rng};
 
+use isha2::Sha2;
+
 use crate::dh;
 use crate::mac::hmac_sha256;
 
@@ -104,7 +106,7 @@ impl SimpleSrpServer {
         &self,
         email: &[u8],
         client_public_key: &BigUint,
-        challenge: &[u8; isha256::DIGEST_LEN],
+        challenge: &[u8; isha2::sha256::DIGEST_LEN],
     ) -> Result<&'static str, Error> {
         if email != self.email {
             return Err(Error::InvalidEmail);
@@ -125,7 +127,7 @@ impl SimpleSrpServer {
         input.extend_from_slice(&password);
 
         // xH = SHA-256(salt || password)
-        let xh = isha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
+        let xh = isha2::sha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
         // x = BigUint(xH)
         let x = BigUint::from_bytes_be(&xh);
 
@@ -157,7 +159,7 @@ impl SimpleSrpServer {
     pub fn validate_challenge(
         &self,
         client_public_key: &BigUint,
-        challenge: &[u8; isha256::DIGEST_LEN],
+        challenge: &[u8; isha2::sha256::DIGEST_LEN],
     ) -> Result<bool, Error> {
         // check that the client has registered, and `generate_password_exponent` was called
         if self.password_exponent.is_zero() {
@@ -173,7 +175,7 @@ impl SimpleSrpServer {
             .modpow(&self.private_exponent, &p);
 
         // K = SHA-256(S)
-        let big_k = isha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
+        let big_k = isha2::sha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
 
         let gen_challenge =
             hmac_sha256(big_k.as_ref(), &self.salt.to_be_bytes()).map_err(|e| Error::Sha256(e))?;
@@ -205,7 +207,7 @@ impl SimpleSrpServer {
     pub fn crack_password(
         &self,
         client_public_key: &BigUint,
-        challenge: &[u8; isha256::DIGEST_LEN],
+        challenge: &[u8; isha2::sha256::DIGEST_LEN],
     ) -> Result<Vec<u8>, Error> {
         // set a maximum to not try past
         let salt_bytes = self.salt.to_be_bytes();
@@ -218,7 +220,7 @@ impl SimpleSrpServer {
             input.extend_from_slice(word.as_ref());
 
             // xH = SHA-256(salt || password)
-            let xh = isha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
+            let xh = isha2::sha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
             // x = BigUint(xH)
             let x = BigUint::from_bytes_be(xh.as_ref());
             // v = G**x % P
@@ -232,7 +234,7 @@ impl SimpleSrpServer {
                 .to_bytes_be();
 
             // K = SHA-256(S)
-            let big_k = isha256::Sha256::digest(&big_s).map_err(|e| Error::Sha256(e))?;
+            let big_k = isha2::sha256::Sha256::digest(&big_s).map_err(|e| Error::Sha256(e))?;
 
             let dig =
                 hmac_sha256(big_k.as_ref(), salt_bytes.as_ref()).map_err(|e| Error::Sha256(e))?;
@@ -321,12 +323,12 @@ impl SimpleSrpClient {
         server_public_key: &BigUint,
         salt: u128,
         u: u128,
-    ) -> Result<[u8; isha256::DIGEST_LEN], Error> {
+    ) -> Result<[u8; isha2::sha256::DIGEST_LEN], Error> {
         let mut input = salt.to_be_bytes().to_vec();
         input.extend_from_slice(&self.password);
 
         // xH = SHA-256(salt || password)
-        let xh = isha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
+        let xh = isha2::sha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
         let x = BigUint::from_bytes_be(xh.as_ref());
 
         // a + u * x
@@ -336,7 +338,7 @@ impl SimpleSrpClient {
         // S = ((B ** (a + u * x)) % P
         let big_s = server_public_key.modpow(&a_plus_ux, &dh::p());
         // K = SHA-256(S)
-        let big_k = isha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
+        let big_k = isha2::sha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
 
         // HMAC-SHA256(K, salt)
         hmac_sha256(big_k.as_ref(), salt.to_be_bytes().as_ref()).map_err(|e| Error::Sha256(e))

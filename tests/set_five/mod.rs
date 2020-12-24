@@ -1,5 +1,8 @@
 use rand::{thread_rng, Rng};
 
+use isha2::Sha2;
+use prime_math::InvMod;
+
 use cryptopals::dh;
 
 #[test]
@@ -215,7 +218,7 @@ fn challenge_thirty_seven() {
 
     // create the forged challenge for login bypass (*no password necessary*)
     let cli_big_a: BigUint = Zero::zero();
-    let s_zero = isha256::Sha256::digest(&cli_big_a.to_bytes_be()).unwrap();
+    let s_zero = isha2::sha256::Sha256::digest(&cli_big_a.to_bytes_be()).unwrap();
     let client_challenge = hmac_sha256(s_zero.as_ref(), &salt.to_be_bytes()).unwrap();
 
     // with known client email, login works like a charm
@@ -351,7 +354,7 @@ fn challenge_thirty_nine() {
 
     let a = BigUint::from_bytes_le(&[17]);
     let b = BigUint::from_bytes_le(3120_u16.to_le_bytes().as_ref());
-    let c = irsa::inv_mod_slow(&a, &b).unwrap().to_u32().unwrap();
+    let c = a.invmod(&b).to_u32().unwrap();
 
     assert_eq!(c, 2753);
 
@@ -400,15 +403,15 @@ fn challenge_forty() {
 
     // c_0 * m_s_0 * invmod(m_s_0, n_0)
     c_0 *= &m_s_0;
-    c_0 *= irsa::inv_mod_slow(&m_s_0, &n_0.n).unwrap();
+    c_0 *= m_s_0.invmod(&n_0.n);
 
     // c_1 * m_s_1 * invmod(m_s_1, n_1)
     c_1 *= &m_s_1;
-    c_1 *= irsa::inv_mod_slow(&m_s_1, &n_1.n).unwrap();
+    c_1 *= m_s_1.invmod(&n_1.n);
 
     // c_2 * m_s_2 * invmod(m_s_2, n_2)
     c_2 *= &m_s_2;
-    c_2 *= irsa::inv_mod_slow(&m_s_2, &n_2.n).unwrap();
+    c_2 *= m_s_2.invmod(&n_2.n);
 
     // sum the products
     c_0 += &c_1;

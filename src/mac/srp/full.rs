@@ -4,6 +4,8 @@ use num::bigint::BigUint;
 use num::{Integer, Zero};
 use rand::{thread_rng, Rng};
 
+use isha2::Sha2;
+
 use crate::dh;
 use crate::mac::hmac_sha256;
 
@@ -76,7 +78,7 @@ impl SrpServer {
         &self,
         email: &[u8],
         client_public_key: &BigUint,
-        challenge: &[u8; isha256::DIGEST_LEN],
+        challenge: &[u8; isha2::sha256::DIGEST_LEN],
     ) -> Result<&'static str, Error> {
         if email != self.email {
             return Err(Error::InvalidEmail);
@@ -96,7 +98,7 @@ impl SrpServer {
         let mut input = self.salt.to_be_bytes().to_vec();
         input.extend_from_slice(&password);
 
-        let xh = isha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
+        let xh = isha2::sha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
         let x = BigUint::from_bytes_be(&xh);
 
         self.password_exponent = dh::public_key(&x).map_err(|e| Error::DiffieHellman(e))?;
@@ -121,7 +123,7 @@ impl SrpServer {
     pub fn validate_challenge(
         &self,
         client_public_key: &BigUint,
-        challenge: &[u8; isha256::DIGEST_LEN],
+        challenge: &[u8; isha2::sha256::DIGEST_LEN],
     ) -> Result<bool, Error> {
         // check that the client has been register and/or `generate_password_exponent` was called
         if self.password_exponent.is_zero() {
@@ -134,7 +136,7 @@ impl SrpServer {
         big_a_b.extend_from_slice(&big_b.to_bytes_be());
 
         // uH = SHA-256(A||B)
-        let uh = isha256::Sha256::digest(&big_a_b).map_err(|e| Error::Sha256(e))?;
+        let uh = isha2::sha256::Sha256::digest(&big_a_b).map_err(|e| Error::Sha256(e))?;
         let u = BigUint::from_bytes_be(uh.as_ref());
 
         // S = ((A * v**u) ** b) % N
@@ -143,7 +145,7 @@ impl SrpServer {
         let big_s = client_public_key
             .mul(&self.password_exponent.modpow(&u, &p))
             .modpow(&self.private_exponent, &p);
-        let big_k = isha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
+        let big_k = isha2::sha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
 
         let gen_challenge =
             hmac_sha256(big_k.as_ref(), &self.salt.to_be_bytes()).map_err(|e| Error::Sha256(e))?;
@@ -226,20 +228,20 @@ impl SrpClient {
         &mut self,
         server_public_key: &BigUint,
         salt: u128,
-    ) -> Result<[u8; isha256::DIGEST_LEN], Error> {
+    ) -> Result<[u8; isha2::sha256::DIGEST_LEN], Error> {
         let mut a_b = dh::public_key(&self.private_exponent)
             .map_err(|e| Error::DiffieHellman(e))?
             .to_bytes_be();
 
         a_b.extend_from_slice(&server_public_key.to_bytes_be());
 
-        let uh = isha256::Sha256::digest(&a_b).map_err(|e| Error::Sha256(e))?;
+        let uh = isha2::sha256::Sha256::digest(&a_b).map_err(|e| Error::Sha256(e))?;
         let u = BigUint::from_bytes_be(&uh);
 
         let mut input = salt.to_be_bytes().to_vec();
         input.extend_from_slice(&self.password);
 
-        let xh = isha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
+        let xh = isha2::sha256::Sha256::digest(&input).map_err(|e| Error::Sha256(e))?;
         let x = BigUint::from_bytes_be(xh.as_ref());
         let k = BigUint::from_bytes_be(&[K]);
 
@@ -253,7 +255,7 @@ impl SrpClient {
         // S = ((B - k * g**x) ** (a + u * x)) % P
         let big_s = server_public_key.sub(kx).modpow(&a_plus_ux, &p);
         // K = SHA-256(S)
-        let big_k = isha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
+        let big_k = isha2::sha256::Sha256::digest(&big_s.to_bytes_be()).map_err(|e| Error::Sha256(e))?;
 
         // HMAC-SHA256(K, salt)
         hmac_sha256(big_k.as_ref(), salt.to_be_bytes().as_ref()).map_err(|e| Error::Sha256(e))

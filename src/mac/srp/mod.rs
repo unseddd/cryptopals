@@ -23,7 +23,7 @@ pub const FAILED_LOGIN: &'static str = "You hackin' muh shit, bruh?";
 /// Secure Remote Password errors
 #[derive(Debug)]
 pub enum Error {
-    Sha256(isha256::Error),
+    Sha256(isha2::Error),
     DiffieHellman(dh::Error),
     AlreadyRegistered,
     FailedLogin(&'static str),

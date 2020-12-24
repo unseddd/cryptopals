@@ -1,3 +1,5 @@
+use isha2::Sha2;
+
 const PAD_LEN: usize = 64;
 // Pad buffer for zeroizing sensitive data
 const ZERO_PAD: [u8; PAD_LEN] = [0_u8; PAD_LEN];
@@ -49,17 +51,17 @@ pub fn hmac_sha1(text: &[u8], key: &[u8]) -> Result<[u8; isha1::DIGEST_LEN], ish
 }
 
 /// Calculate HMAC-SHA256 of a given text using the provided key
-pub fn hmac_sha256(text: &[u8], key: &[u8]) -> Result<[u8; isha256::DIGEST_LEN], isha256::Error> {
+pub fn hmac_sha256(text: &[u8], key: &[u8]) -> Result<[u8; isha2::sha256::DIGEST_LEN], isha2::Error> {
     let key_len = key.len();
 
     let mut k_ipad = [0_u8; PAD_LEN];
     let mut k_opad = [0_u8; PAD_LEN];
 
     if key_len > PAD_LEN {
-        let mut digest = isha256::Sha256::digest(&key)?;
-        k_ipad[..isha256::DIGEST_LEN].copy_from_slice(digest.as_ref());
-        k_opad[..isha256::DIGEST_LEN].copy_from_slice(digest.as_ref());
-        digest.copy_from_slice(&ZERO_PAD[..isha256::DIGEST_LEN]);
+        let mut digest = isha2::sha256::Sha256::digest(&key)?;
+        k_ipad[..isha2::sha256::DIGEST_LEN].copy_from_slice(digest.as_ref());
+        k_opad[..isha2::sha256::DIGEST_LEN].copy_from_slice(digest.as_ref());
+        digest.copy_from_slice(&ZERO_PAD[..isha2::sha256::DIGEST_LEN]);
     } else {
         k_ipad[..key_len].copy_from_slice(&key);
         k_opad[..key_len].copy_from_slice(&key);
@@ -70,7 +72,7 @@ pub fn hmac_sha256(text: &[u8], key: &[u8]) -> Result<[u8; isha256::DIGEST_LEN],
         *opad ^= 0x5c;
     }
 
-    let mut sha = isha256::Sha256::new();
+    let mut sha = isha2::sha256::Sha256::new();
 
     sha.input(&k_ipad)?;
 
@@ -89,7 +91,7 @@ pub fn hmac_sha256(text: &[u8], key: &[u8]) -> Result<[u8; isha256::DIGEST_LEN],
     sha.input(&digest)?;
 
     // zero any potentially sensitive data
-    digest.copy_from_slice(&ZERO_PAD[..isha256::DIGEST_LEN]);
+    digest.copy_from_slice(&ZERO_PAD[..isha2::sha256::DIGEST_LEN]);
 
     sha.finalize()
 }

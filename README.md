@@ -7,7 +7,7 @@ Challenges are organized as integration tests, with one module for each challeng
 To verify solutions:
 
 ```
-git clone --recurse https://github.com/unseddd/cryptopals
+git clone https://github.com/unseddd/cryptopals
 cd cryptopals
 cargo test --all
 ```
