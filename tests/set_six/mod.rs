@@ -255,3 +255,103 @@ fn challenge_forty_five_b() {
     public_key.verify(rand_msg.as_ref(), &r0, &s0).unwrap();
     public_key.verify(rand_msg.as_ref(), &r1, &s1).unwrap();
 }
+
+pub struct RsaParityOracle {
+    private_key: irsa::RsaPrivateKey,
+    public_key: irsa::RsaPublicKey,
+}
+
+impl RsaParityOracle {
+    /// Create a new RsaParityOracle
+    pub fn new() -> Self {
+        let sk = irsa::RsaPrivateKey::new(irsa::RSA_1024_LEN).unwrap();
+        let pk = irsa::RsaPublicKey::new(&sk).unwrap();
+        Self { private_key: sk, public_key: pk }
+    }
+
+    /// Encrypt a message under the oracle's public key
+    pub fn encrypt(&self, msg: &[u8]) -> Vec<u8> {
+        self.public_key.encrypt(&msg).unwrap()
+    }
+
+    /// Parity oracle
+    ///
+    /// Returns whether the decryption of the plaintext is even (true) or odd (false)
+    pub fn oracle(&self, ciphertext: &[u8]) -> bool {
+        let pt = self.private_key.decrypt(ciphertext).unwrap();
+        pt[pt.len() - 1] & 0x1 == 0
+    }
+
+    /// Get the public modulus N
+    pub fn n(&self) -> &BigUint {
+        &self.public_key.n
+    }
+
+    /// Get the public exponent e
+    pub fn e(&self) -> &BigUint {
+        &self.public_key.e
+    }
+}
+
+#[test]
+fn challenge_forty_six() {
+    use num::ToPrimitive;
+    use cryptopals::encoding::from_base64;
+
+    let msg_b64 = b"VGhhdCdzIHdoeSBJIGZvdW5kIHlvdSBkb24ndCBwbGF5IGFyb3VuZCB3aXRoIHRoZSBGdW5reSBDb2xkIE1lZGluYQ==";
+    let msg = from_base64(msg_b64.as_ref()).unwrap();
+    // for comparison
+    let msg_bn = BigUint::from_bytes_be(&msg);
+    let oracle = RsaParityOracle::new();
+    let ciphertext = oracle.encrypt(&msg);
+    let mut ciph_bn = BigUint::from_bytes_be(&ciphertext);
+
+    let n = oracle.n();
+    let mut upper_bound = oracle.n().clone();
+    let mut lower_bound = BigUint::from(0_u8);
+    let two = BigUint::from(2_u8);
+
+    for i in 0..n.bits() {
+        // double the ciphertext
+        ciph_bn = (&ciph_bn * &two.modpow(oracle.e(), n)).mod_floor(n); 
+
+        // divide modulus N by the next power of two
+        let new_bound = n.div_floor(&two.pow((i+1) as u32));
+        // shrink bounds by the next power of two
+        if oracle.oracle(&ciph_bn.to_bytes_be()) {
+            // plaintext * 2**(i*e) mod n didn't wrap modulus
+            // shrink the upper bound
+            upper_bound = &upper_bound - &new_bound;
+        } else {
+            // plaintext * 2**(i*e) mod n did wrap modulus
+            // shrink the lower bound
+            lower_bound = &lower_bound + &new_bound;
+        }
+
+        // "hollywood style" decryption lel
+        println!("cracking: {}", upper_bound);
+    }
+
+    assert!(upper_bound >= msg_bn && lower_bound <= msg_bn,
+            "failure\nupper_bound: {}\nlower_bound: {}\nmessage    : {}",
+            upper_bound,
+            lower_bound,
+            msg_bn,
+    ); 
+
+    // FIXME: best results are in a range of candidates < 1024
+    //     usually around 480-550
+    //     how to improve?
+    let mut range = (&upper_bound - &lower_bound).to_u32().unwrap();
+    assert!(range < 1024);
+    range /= 4;
+    lower_bound += range;
+    upper_bound -= range;
+
+    for i in 0..range {
+        match core::str::from_utf8(&(&lower_bound + i).to_bytes_be()) {
+            Ok(s) => println!("attempt: {}", s),
+            _ => (),
+        }
+    }
+}
