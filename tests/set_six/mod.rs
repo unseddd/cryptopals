@@ -165,3 +165,93 @@ fn challenge_forty_four() {
     // res == x
     assert_eq!(&x, private_key.x());
 }
+
+#[test]
+fn challenge_forty_five_a() {
+    let msg0 = b"Hello, world";
+    let msg1 = b"Goodbye, world";
+    let mut rng = thread_rng();
+
+    // Generate DSA parameters and private key
+    let primes = idsa::generate_prob_primes(
+        idsa::L_1024,
+        idsa::N_160,
+        idsa::N_160,
+        idsa::ParameterValidation::Discard,
+        &mut rng,
+    )
+    .unwrap();
+    let g = BigUint::from(0_u8);
+    let private_key =
+        idsa::DsaPrivateKey::from_parameters(primes, g, None, idsa::Trusted::True, &mut rng)
+            .unwrap();
+    let public_key = idsa::DsaPublicKey::from(&private_key);
+
+    let mut k_bytes = [0_u8; 20];
+    rng.fill(&mut k_bytes);
+    k_bytes[0] |= 0x80;
+    let k = BigUint::from_bytes_be(k_bytes.as_ref());
+
+    // Sign according to FIPS 186-4, using g=0 as the generator
+    //
+    // Supply non-canonical `k`, since generating a secret nonce according to FIPS 186-4
+    // with a g=0 generator results in infinite loop
+    let (r0, s0) = private_key.sign_with_k_insecure(msg0.as_ref(), &k).unwrap();
+    let (r1, s1) = private_key.sign_with_k_insecure(msg1.as_ref(), &k).unwrap();
+    // verify each message against its respective signature
+    public_key.verify_insecure(msg0.as_ref(), &r0, &s0).unwrap();
+    public_key.verify_insecure(msg1.as_ref(), &r1, &s1).unwrap();
+    // verify the first message against the second signature
+    public_key.verify_insecure(msg0.as_ref(), &r1, &s1).unwrap();
+    // verify the second message against the first signature
+    public_key.verify_insecure(msg1.as_ref(), &r0, &s0).unwrap();
+    // verify the bad signatures fail using normal verification, since r and s == 0 mod q
+    assert!(public_key.verify(msg0.as_ref(), &r1, &s1).is_err());
+    assert!(public_key.verify(msg1.as_ref(), &r0, &s0).is_err());
+}
+
+#[test]
+fn challenge_forty_five_b() {
+    let msg0 = b"Hello, world";
+    let msg1 = b"Goodbye, world";
+    let mut rng = thread_rng();
+
+    // Generate DSA parameters and private key
+    let primes = idsa::generate_prob_primes(
+        idsa::L_1024,
+        idsa::N_160,
+        idsa::N_160,
+        idsa::ParameterValidation::Discard,
+        &mut rng,
+    )
+    .unwrap();
+    let g = BigUint::from(1_u8);
+    let private_key =
+        idsa::DsaPrivateKey::from_parameters(primes, g, None, idsa::Trusted::True, &mut rng)
+            .unwrap();
+    let public_key = idsa::DsaPublicKey::from(&private_key);
+
+    let mut k_bytes = [0_u8; 20];
+    rng.fill(&mut k_bytes);
+    k_bytes[0] |= 0x80;
+    let k = BigUint::from_bytes_be(k_bytes.as_ref());
+
+    // Sign according to FIPS 186-4, using g=1 as the generator
+    //
+    // Supply non-canonical `k`, since generating a secret nonce according to FIPS 186-4
+    // with a g=1 generator results in infinite loop
+    let (r0, s0) = private_key.sign_with_k_insecure(msg0.as_ref(), &k).unwrap();
+    let (r1, s1) = private_key.sign_with_k_insecure(msg1.as_ref(), &k).unwrap();
+    // verify each message against its respective signature
+    public_key.verify(msg0.as_ref(), &r0, &s0).unwrap();
+    public_key.verify(msg1.as_ref(), &r1, &s1).unwrap();
+    // verify the first message against the second signature
+    public_key.verify(msg0.as_ref(), &r1, &s1).unwrap();
+    // verify the second message against the first signature
+    public_key.verify(msg1.as_ref(), &r0, &s0).unwrap();
+    // verify a random message verifies against the generated signatures
+    let mut rand_msg = [0u8; 32];
+    rng.fill(&mut rand_msg);
+    public_key.verify(rand_msg.as_ref(), &r0, &s0).unwrap();
+    public_key.verify(rand_msg.as_ref(), &r1, &s1).unwrap();
+}
