@@ -80,9 +80,18 @@ fn challenge_forty_three() {
     let mut rng = thread_rng();
 
     // Generate DSA parameters and private key
-    let primes = idsa::generate_prob_primes(idsa::L_1024, idsa::N_160, idsa::N_160, idsa::ParameterValidation::Discard, &mut rng).unwrap();
+    let primes = idsa::generate_prob_primes(
+        idsa::L_1024,
+        idsa::N_160,
+        idsa::N_160,
+        idsa::ParameterValidation::Discard,
+        &mut rng,
+    )
+    .unwrap();
     let g = idsa::generate_unverifiable_g(&primes).unwrap();
-    let private_key = idsa::DsaPrivateKey::from_parameters(primes, g, None, idsa::Trusted::True, &mut rng).unwrap();
+    let private_key =
+        idsa::DsaPrivateKey::from_parameters(primes, g, None, idsa::Trusted::True, &mut rng)
+            .unwrap();
 
     // Sign according to FIPS 186-4, but insecurely return the secret nonce `k`
     let (r, s, k) = private_key.sign_insecure(msg.as_ref(), &mut rng).unwrap();
@@ -92,9 +101,67 @@ fn challenge_forty_three() {
     let h_bytes = isha2::sha256::Sha256::digest(msg.as_ref()).unwrap();
     // h = H(msg)
     // take the leftmost 160-bits of H, because FIPS 186-4 tells us to
-    let mut res = BigUint::from_bytes_be(&h_bytes[..idsa::N_160 as usize/8]);
+    let mut res = BigUint::from_bytes_be(&h_bytes[..idsa::N_160 as usize / 8]);
     // (s * k) - H(msg) / r mod q
     res = (((&s * &k) - &res) * &r_inv).mod_floor(private_key.q());
     // res == x
     assert_eq!(&res, private_key.x());
+}
+
+#[test]
+fn challenge_forty_four() {
+    use num::BigInt;
+
+    let msg0 = b"courage is a practice, not something innate";
+    let msg1 = b"everyone experiences fear, only how you deal with it matters";
+    let mut rng = thread_rng();
+
+    // Generate DSA parameters and private key
+    let primes = idsa::generate_prob_primes(
+        idsa::L_1024,
+        idsa::N_160,
+        idsa::N_160,
+        idsa::ParameterValidation::Discard,
+        &mut rng,
+    )
+    .unwrap();
+    let g = idsa::generate_unverifiable_g(&primes).unwrap();
+    let private_key =
+        idsa::DsaPrivateKey::from_parameters(primes, g, None, idsa::Trusted::True, &mut rng)
+            .unwrap();
+
+    // Sign according to FIPS 186-4, but insecurely return the secret nonce `k`
+    // Recover `k` to sign the second message with the same `k`
+    //
+    // This is just to setup the attack scenario,
+    // pretend like the attacker doesn't have access to `k` yet
+    let (r0, s0, k) = private_key.sign_insecure(msg0.as_ref(), &mut rng).unwrap();
+    let (_r1, s1) = private_key.sign_with_k_insecure(msg1.as_ref(), &k).unwrap();
+
+    // recover `k` as the attacker
+    let qi: BigInt = private_key.q().clone().into();
+    // take the hashes of the messages
+    let h0 = isha2::sha256::Sha256::digest(msg0.as_ref()).unwrap();
+    let h1 = isha2::sha256::Sha256::digest(msg1.as_ref()).unwrap();
+    // take the leftmost 160-bits of H, because FIPS 186-4 tells us to
+    let m0i = BigInt::from_bytes_be(num::bigint::Sign::Plus, &h0[..20]);
+    let m1i = BigInt::from_bytes_be(num::bigint::Sign::Plus, &h1[..20]);
+    let s0i: BigInt = s0.clone().into();
+    let s1i: BigInt = s1.clone().into();
+    // ki = (m1 - m2) / (s1 - s2) mod q
+    let ki = ((&m0i - &m1i).mod_floor(&qi) * (s0i - s1i).invmod(&qi)).mod_floor(&qi);
+
+    // validate recovered `k` matches the one used to sign the message
+    let (_, rec_k) = ki.into_parts();
+    assert_eq!(rec_k, k);
+
+    // Now that we have `k`, recover the private key using the attack from #43
+
+    // r_inv = 1 / r mod q
+    let r_inv = r0.invmod(private_key.q());
+    let (_, mut x) = m0i.into_parts();
+    // (s * k) - H(msg) / r mod q
+    x = (((&s0 * &rec_k) - &x) * &r_inv).mod_floor(private_key.q());
+    // res == x
+    assert_eq!(&x, private_key.x());
 }
