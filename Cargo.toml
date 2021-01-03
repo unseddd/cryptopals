@@ -11,6 +11,7 @@ hashbrown = "0.9.0"
 libm = "0.2.1"
 num = { version = "0.3", default-features = false, features = ["alloc", "num-bigint"] }
 craes = { git = "https://github.com/unseddd/craes", branch = "main" }
+idsa = { git = "https://github.com/unseddd/idsa", branch = "main" }
 irsa = { git = "https://github.com/unseddd/irsa", branch = "main" }
 isha1 = { git = "https://github.com/unseddd/isha1", branch = "main" }
 isha2 = { git = "https://github.com/unseddd/isha2", branch = "main" }

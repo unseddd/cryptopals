@@ -3,6 +3,7 @@ use num::Integer;
 
 use rand::{thread_rng, Rng};
 
+use isha2::Sha2;
 use prime_math::InvMod;
 
 #[test]
@@ -75,4 +76,25 @@ fn challenge_forty_two() {
 
 #[test]
 fn challenge_forty_three() {
+    let msg = b"when I die, launch my body into the sun";
+    let mut rng = thread_rng();
+
+    // Generate DSA parameters and private key
+    let primes = idsa::generate_prob_primes(idsa::L_1024, idsa::N_160, idsa::N_160, idsa::ParameterValidation::Discard, &mut rng).unwrap();
+    let g = idsa::generate_unverifiable_g(&primes).unwrap();
+    let private_key = idsa::DsaPrivateKey::from_parameters(primes, g, None, idsa::Trusted::True, &mut rng).unwrap();
+
+    // Sign according to FIPS 186-4, but insecurely return the secret nonce `k`
+    let (r, s, k) = private_key.sign_insecure(msg.as_ref(), &mut rng).unwrap();
+
+    // r_inv = 1 / r mod q
+    let r_inv = r.invmod(private_key.q());
+    let h_bytes = isha2::sha256::Sha256::digest(msg.as_ref()).unwrap();
+    // h = H(msg)
+    // take the leftmost 160-bits of H, because FIPS 186-4 tells us to
+    let mut res = BigUint::from_bytes_be(&h_bytes[..idsa::N_160 as usize/8]);
+    // (s * k) - H(msg) / r mod q
+    res = (((&s * &k) - &res) * &r_inv).mod_floor(private_key.q());
+    // res == x
+    assert_eq!(&res, private_key.x());
 }
