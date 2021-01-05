@@ -1,4 +1,5 @@
 use num::bigint::BigUint;
+use num::rational::Ratio;
 use num::Integer;
 
 use rand::{thread_rng, Rng};
@@ -354,4 +355,313 @@ fn challenge_forty_six() {
             _ => (),
         }
     }
+}
+
+pub struct RsaPkcsOracle {
+    pubkey: irsa::RsaPublicKey,
+    pvtkey: irsa::RsaPrivateKey,
+}
+
+const ZEROS: [u8; 1024] = [0u8; 1024];
+
+impl RsaPkcsOracle {
+    /// Create a new padding oracle with 256-bit RSA keys
+    pub fn new(size: usize) -> Self {
+        let pvt = irsa::RsaPrivateKey::from_exponent_insecure(3, size).unwrap();
+        Self {
+            pubkey: irsa::RsaPublicKey::from_private_key_insecure(&pvt),
+            pvtkey: pvt,
+        }
+    }
+
+    /// Encode a message using original PKCS#1 spec
+    pub fn encode_pkcs(&self, msg: &[u8]) -> Vec<u8> {
+        let n_len = self.pubkey.n.bits() as usize / 8;
+        let mut encmsg: Vec<u8> = Vec::with_capacity(n_len);
+        encmsg.extend_from_slice(&[0x00, 0x02]);
+        let pad_len = n_len - 3 - msg.len();
+        encmsg.extend_from_slice(&vec![0xff; pad_len]);
+        encmsg.push(0x00);
+        encmsg.extend_from_slice(msg);
+        encmsg
+    }
+
+    /// Encode message with PCKS#1, and encrypt under the oracle's public key
+    pub fn encrypt_pkcs(&self, msg: &[u8]) -> Vec<u8> {
+        self.pubkey.encrypt(&self.encode_pkcs(msg)).unwrap()
+    }
+
+    /// Returns true or false if decryption is PKCS conforming 
+    pub fn verify(&self, ciphertext_bn: &BigUint, s: &[u8]) -> bool {
+        let s_enc = BigUint::from_bytes_be(&self.pubkey.encrypt(s).unwrap());
+        let t_enc = (ciphertext_bn * s_enc).mod_floor(&self.pubkey.n).to_bytes_be();
+        let dec = match self.pvtkey.decrypt(&t_enc) {
+            Ok(d) => d,
+            Err(_) => return false,
+        };
+        let mut msg = ZEROS[..(self.pubkey.n_len / 8) - dec.len()].to_vec();
+        msg.extend_from_slice(&dec);
+        // validate PKCS conforming according to Bleichenbacher '98 Definition 1
+        if &msg[..2] != &[0x0, 0x2] { return false };
+        for &b in msg[2..10].iter() {
+            if b == 0x0 { return false };
+        }
+        for &b in msg[10..].iter() {
+            if b == 0x0 { return true };
+        }
+        true
+    }
+
+    /// Get the oracle's RSA modulus
+    pub fn n(&self) -> &BigUint {
+        &self.pubkey.n
+    }
+}
+
+/*
+#[allow(dead_code)]
+fn bleichenbacher_1(oracle: &RsaPkcsOracle, c: &BigUint) -> Result<(BigUint, BigUint), String> {
+    let n = oracle.n();
+    let k = (n.bits() / 8) as usize;
+    let mut s0_bytes: Vec<u8> = Vec::with_capacity(k - 1);
+    s0_bytes.resize(k -1, 0);
+
+    let mut rng = thread_rng();
+    loop {
+        rng.fill(s0_bytes.as_mut_slice());
+        s0_bytes[0] |= 0x80;
+        if oracle.verify(&c, &s0_bytes) {
+            let c0 = (c * BigUint::from_bytes_be(&oracle.encrypt(&s0_bytes))).mod_floor(n);
+            return Ok((BigUint::from_bytes_be(&s0_bytes), c0));
+        }
+    }
+}
+*/
+
+fn bleichenbacher_2ab(oracle: &RsaPkcsOracle, c0: &BigUint, si: &mut BigUint, three_b: &BigUint) -> Result<(), String> {
+    println!("2ab. finding si s.t. c0*(si**e) mod n is PKCS conforming");
+    let mut i = 1;
+    while &*si < three_b && i < 20_000_000 {
+        if oracle.verify(&c0, &si.to_bytes_be()) {
+            // found a PKCS conforming c0(si**e) mod n
+            println!("2ab. found candidate\nsi      : {}\nattempts: {}", si, i);
+            return Ok(());
+        }
+        *si += 1_u32;
+        i += 1;
+    }
+    Err(format!("2ab. no valid si found\nsi: {}\n3B: {}", si, three_b))
+}
+
+fn bleichenbacher_2c(
+    oracle: &RsaPkcsOracle,
+    c0: &BigUint,
+    m_i: &[(BigUint, BigUint)],
+    si: &mut BigUint,
+    si_1: &BigUint,
+    two_b: &BigUint,
+    three_b: &BigUint,
+) -> Result<(), String> {
+    println!("2c. linear search for finding si s.t. c0*(si**e) mod n is PKCS conforming");
+    let (a, b) = &m_i[0];
+
+    let n = oracle.n();
+    let one = Ratio::from_integer(BigUint::from(1_u8));
+
+    // r = (2 * b * s[i-1] - 2B)/n
+    let mut r = Ratio::from_integer((2_u32 * b * si_1) - two_b) / n;
+    println!("2. r: {}", r);
+    loop {
+        // 2B + ri*n / b <= si < 3B + ri*n / a
+        // (2B + ri*n) / b
+        let rn = &r * n;
+        let mut s_lo: BigUint = ((&rn + two_b) / b).to_integer();
+        // (3B + ri*n) / a
+        let s_hi: BigUint = ((&rn + three_b) / a).to_integer();
+
+        while s_lo < s_hi {
+            if oracle.verify(&c0, &s_lo.to_bytes_be()) {
+                *si = s_lo;
+                return Ok(());
+            }
+            s_lo += 1_u32;
+        }
+
+        r += &one;
+    }
+}
+
+// construct next set of intervals for testing
+fn bleichenbacher_3(
+    m: &mut Vec<Vec<(BigUint, BigUint)>>,
+    si: &BigUint,
+    two_b: &BigUint,
+    three_b: &BigUint,
+    n: &BigUint,
+) {
+    println!("3. narrowing search range, round: {}, si: {}", m.len(), si);
+
+    let two_bf = Ratio::from_integer(two_b.clone());
+    let three_bf = Ratio::from_integer(three_b.clone());
+    let one = Ratio::from_integer(BigUint::from(1_u8));
+
+    let mut m_i: Vec<(BigUint, BigUint)> = Vec::new();
+    let last_m = &m[m.len() - 1];
+    for (i, (a, b)) in last_m.iter().enumerate() {
+        // (a*si - 3B + 1) / n <= r <= (b*si - 2B) / n
+        let mut r = Ratio::from_integer((a*si) - three_b + 1_u32) / n;
+        let r_hi = Ratio::from_integer((b*si) - two_b) / n;
+
+        while r <= r_hi {
+            // Mi = [max(a, ceil((2B + r*n) / si)), min(b, floor((3B - 1 + rn) / si))
+            let rn = &r * n;
+            let lo_max: BigUint = ((&two_bf + &rn) / si).ceil().to_integer();
+            let hi_min: BigUint = ((&three_bf - &one + &rn) / si).floor().to_integer();
+
+            let lo = core::cmp::max(a.clone(), lo_max);
+            let hi = core::cmp::min(b.clone(), hi_min);
+
+            assert!(&lo < three_b && &lo <= &hi && &hi >= two_b, "3. invalid lo and hi range\n    lo: {}\n    hi: {}", lo, hi);
+
+            match m_i.last() {
+                Some(lo_hi) => {
+                    let nlo_hi = (lo, hi);
+                    if &nlo_hi != lo_hi && &nlo_hi != &last_m[i] {
+                        println!("    r_lo: {}\n    r_hi: {}", r, r_hi);
+                        println!("    lo: {}\n    hi: {}", nlo_hi.0, nlo_hi.1);
+                        m_i.push(nlo_hi);
+                    }
+                }
+                None => m_i.push((lo, hi)),
+            }
+
+            r += &one;
+        }
+    }
+    println!("last len: {}\nthis len: {}", m[m.len() - 1].len(), m_i.len());
+    m.push(m_i);
+}
+
+#[test]
+fn challenge_forty_seven() {
+    let msg = b"Things you want to keep";
+    let oracle = RsaPkcsOracle::new(256);
+
+    let two = BigUint::from(2_u8);
+    let n = oracle.n();
+    let k = (n.bits() / 8) as u32;
+    let k_2 = (k-2)*8;
+    // 2B = 2**((k-2) * 8) * 2 = 2**((k-2)*8 + 1)
+    let big_b = two.pow(k_2);
+    let two_b = &big_b * &two;
+    // 3B = 2**((k-2) * 8) * 3
+    let three_b = &two_b + &big_b;
+    let i_max = 2_000_000_usize;
+
+    // Step 1.
+    // Skip step 1. because c0 is already a PKCS conforming ciphertext
+    // Simulate capturing a target PKCS#1 encoded ciphertext
+    let c0 = BigUint::from_bytes_be(&oracle.encrypt_pkcs(msg.as_ref()));
+    let s0 = BigUint::from(1_u8);
+
+    // round 1, search for s0 > ceil(n / 3B)
+    let mut si = Ratio::new(n.clone(), three_b.clone()).ceil().to_integer();
+    let mut si_1 = s0.clone();
+
+    let mut m: Vec<Vec<(BigUint, BigUint)>> = [[(two_b.clone(), (&three_b - 1_u32))].to_vec()].to_vec();
+    let encmsg = oracle.encode_pkcs(msg.as_ref());
+
+    let mut j = 1;
+    for i in 1..i_max {
+        println!("iteration: {}", i);
+
+        if i == 1 || m[i-1].len() > 1 {
+            // Step 2.a/b
+            bleichenbacher_2ab(&oracle, &c0, &mut si, &three_b).unwrap();
+        } else {
+            // Step 2.c searching with one interval left.
+            bleichenbacher_2c(&oracle, &c0, &m[i-1], &mut si, &si_1, &two_b, &three_b).unwrap(); 
+        }
+
+        // Step 3. construct next set of intervals based on the previous set
+        bleichenbacher_3(&mut m, &si, &two_b, &three_b, n);
+
+        // Step 4. if a == b, then m = a(s0)**-1 mod n
+        let (a, b) = m[i-1].last().unwrap();
+        if m[i].len() == 1 && a == b {
+            // m = a * s0**-1 mod n
+            let m = (a * s0.invmod(n)).mod_floor(n);
+            //let m = a.mod_floor(n);
+            assert_eq!(encmsg[1..], m.to_bytes_be()[..], "\nmsg: {}\nm[{}]: {}", BigUint::from_bytes_be(&encmsg), i, m);
+            break;
+        } else {
+            // otherwise, set s[i-1] = s[i], and s[i] += 1
+            si_1 = si.clone();
+            si += 1_u32;
+            j += 1;
+        }
+    }
+    assert!(j < i_max, "no solution found");
+}
+
+#[test]
+fn challenge_forty_eight() {
+    let msg = b"Things you want to throw away";
+    let oracle = RsaPkcsOracle::new(768);
+
+    let two = BigUint::from(2_u8);
+    let n = oracle.n();
+    let k = (n.bits() / 8) as u32;
+    let k_2 = (k-2)*8;
+    // 2B = 2**((k-2) * 8) * 2 = 2**((k-2)*8 + 1)
+    let big_b = two.pow(k_2);
+    let two_b = &big_b * &two;
+    // 3B = 2**((k-2) * 8) * 3
+    let three_b = &two_b + &big_b;
+    let i_max = 2_000_000_usize;
+
+    // Step 1.
+    // Skip step 1. because c0 is already a PKCS conforming ciphertext
+    // Simulate capturing a target PKCS#1 encoded ciphertext
+    let c0 = BigUint::from_bytes_be(&oracle.encrypt_pkcs(msg.as_ref()));
+    let s0 = BigUint::from(1_u8);
+
+    // round 1, search for s0 > ceil(n / 3B)
+    let mut si = Ratio::new(n.clone(), three_b.clone()).ceil().to_integer();
+    let mut si_1 = s0.clone();
+
+    let mut m: Vec<Vec<(BigUint, BigUint)>> = [[(two_b.clone(), (&three_b - 1_u32))].to_vec()].to_vec();
+    let encmsg = oracle.encode_pkcs(msg.as_ref());
+
+    let mut j = 1;
+    for i in 1..i_max {
+        println!("iteration: {}", i);
+
+        if i == 1 || m[i-1].len() > 1 {
+            // Step 2.a/b
+            bleichenbacher_2ab(&oracle, &c0, &mut si, &three_b).unwrap();
+        } else {
+            // Step 2.c searching with one interval left.
+            bleichenbacher_2c(&oracle, &c0, &m[i-1], &mut si, &si_1, &two_b, &three_b).unwrap(); 
+        }
+
+        // Step 3. construct next set of intervals based on the previous set
+        bleichenbacher_3(&mut m, &si, &two_b, &three_b, n);
+
+        // Step 4. if a == b, then m = a(s0)**-1 mod n
+        let (a, b) = m[i-1].last().unwrap();
+        if m[i].len() == 1 && a == b {
+            // m = a * s0**-1 mod n
+            let m = (a * s0.invmod(n)).mod_floor(n);
+            //let m = a.mod_floor(n);
+            assert_eq!(encmsg[1..], m.to_bytes_be()[..], "\nmsg: {}\nm[{}]: {}", BigUint::from_bytes_be(&encmsg), i, m);
+            break;
+        } else {
+            // otherwise, set s[i-1] = s[i], and s[i] += 1
+            si_1 = si.clone();
+            si += 1_u32;
+            j += 1;
+        }
+    }
+    assert!(j < i_max, "no solution found");
 }
