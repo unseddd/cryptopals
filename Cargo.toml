@@ -11,6 +11,7 @@ hashbrown = "0.9.0"
 libm = "0.2.1"
 num = { version = "0.3", default-features = false, features = ["alloc", "num-bigint"] }
 craes = { git = "https://github.com/unseddd/craes", branch = "main" }
+idsa = { git = "https://github.com/unseddd/idsa", branch = "main" }
 irsa = { git = "https://github.com/unseddd/irsa", branch = "main" }
 isha1 = { git = "https://github.com/unseddd/isha1", branch = "main" }
 isha2 = { git = "https://github.com/unseddd/isha2", branch = "main" }
@@ -18,4 +19,4 @@ bmd4 = { git = "https://github.com/unseddd/bmd4", branch = "main" }
 rand = "0.7"
 
 [dev-dependencies]
-prime-math = { git = "https://github.com/unseddd/prime-math", branch = "main" }
+prime-math = { git = "https://github.com/unseddd/prime-math.git", branch = "main" }

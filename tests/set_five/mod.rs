@@ -1,9 +1,8 @@
 use rand::{thread_rng, Rng};
 
+use cryptopals::dh;
 use isha2::Sha2;
 use prime_math::InvMod;
-
-use cryptopals::dh;
 
 #[test]
 #[allow(non_snake_case)]
@@ -374,9 +373,15 @@ fn challenge_forty() {
     use num::bigint::BigUint;
     use num::Integer;
 
-    let n_0 = irsa::RsaPublicKey::from(&irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap());
-    let n_1 = irsa::RsaPublicKey::from(&irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap());
-    let n_2 = irsa::RsaPublicKey::from(&irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap());
+    let n_0 = irsa::RsaPublicKey::from(
+        &irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap(),
+    );
+    let n_1 = irsa::RsaPublicKey::from(
+        &irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap(),
+    );
+    let n_2 = irsa::RsaPublicKey::from(
+        &irsa::RsaPrivateKey::from_exponent(3, irsa::RSA_1024_LEN).unwrap(),
+    );
 
     // pretend we don't actually know this plaintext
     let orig_text = b"no way they ever read this";
