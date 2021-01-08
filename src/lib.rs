@@ -2,6 +2,9 @@
 
 extern crate alloc;
 
+/// Utilities for manipulating bytes
+pub mod bytes;
+
 /// Tools for AES-128-CTR related challenges
 pub mod ctr;
 

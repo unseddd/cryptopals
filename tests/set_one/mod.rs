@@ -1,5 +1,6 @@
 use cryptopals::{
-    encoding::{from_base64, from_hex, from_hex_bytes, to_base64, xor, xor_key, xor_multi_key},
+    bytes::xor,
+    encoding::{from_base64, from_hex, from_hex_bytes, to_base64, xor_key, xor_multi_key},
     language::{build_english_bigrams, guess_single_xor_key, Attempt},
 };
 
@@ -17,7 +18,7 @@ fn challenge_two() {
     let xor_in = from_hex("1c0111001f010100061a024b53535009181c").unwrap();
     let xor_key = from_hex("686974207468652062756c6c277320657965").unwrap();
     let exp_xor = from_hex("746865206b696420646f6e277420706c6179").unwrap();
-    let xor_out = xor(&xor_in, &xor_key).unwrap();
+    let xor_out = xor(&xor_in, &xor_key);
 
     assert_eq!(xor_out, exp_xor);
 }

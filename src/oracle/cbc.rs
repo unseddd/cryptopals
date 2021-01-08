@@ -6,6 +6,7 @@ use rand::{thread_rng, Rng};
 
 use craes::{aes, cbc, pkcs7};
 
+use crate::bytes::xor_assign;
 use crate::encoding;
 
 use super::{gen_rand_iv, gen_rand_key, Error};
@@ -253,7 +254,7 @@ pub fn decrypt_cbc_padding_oracle(
             res.extend_from_slice(&[16_u8; aes::BLOCK_LEN]);
         } else {
             block_decryption_oracle(&oracle, &block, &mut dy_bytes, pos)?;
-            encoding::xor_equals(&mut dy_bytes, &iv).unwrap();
+            xor_assign(&mut dy_bytes, &iv);
             res.extend_from_slice(&dy_bytes);
         }
     }

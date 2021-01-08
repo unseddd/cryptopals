@@ -1,7 +1,7 @@
 #![macro_use]
 use alloc::{vec, vec::Vec};
 
-use crate::encoding::{xor, Error as XORError};
+use crate::bytes::xor;
 
 /// Maximum key length used for guessing Vigenere key length
 const MAX_KEY_LENGTH: usize = 128;
@@ -10,16 +10,14 @@ const MAX_KEY_LENGTH: usize = 128;
 pub enum Error {
     BlockLength,
     GuessLength,
-    Xor(XORError),
 }
 
 /// Find the hamming distance between two byte slices
-pub fn hamming_distance(left: &[u8], right: &[u8]) -> Result<u64, Error> {
-    Ok(xor(left, right)
-        .map_err(|e| Error::Xor(e))?
+pub fn hamming_distance(left: &[u8], right: &[u8]) -> u64 {
+    xor(left, right)
         .iter()
         .map(|x| x.count_ones() as u64)
-        .sum())
+        .sum()
 }
 
 /// Guess the key length based on the two key-length groups with the lowest Hamming distance
@@ -33,12 +31,12 @@ pub fn guess_key_length(bytes: &[u8], start_len: usize) -> Result<usize, Error> 
     let mut res = MAX_KEY_LENGTH;
 
     for i in start_len..MAX_KEY_LENGTH {
-        let guess = (hamming_distance(&bytes[..i], &bytes[i..i * 2])?
-            + hamming_distance(&bytes[..i], &bytes[i * 2..i * 3])?
-            + hamming_distance(&bytes[..i], &bytes[i * 3..i * 4])?
-            + hamming_distance(&bytes[i..i * 2], &bytes[i * 2..i * 3])?
-            + hamming_distance(&bytes[i..i * 2], &bytes[i * 3..i * 4])?
-            + hamming_distance(&bytes[i * 2..i * 3], &bytes[i * 3..i * 4])?)
+        let guess = (hamming_distance(&bytes[..i], &bytes[i..i * 2])
+            + hamming_distance(&bytes[..i], &bytes[i * 2..i * 3])
+            + hamming_distance(&bytes[..i], &bytes[i * 3..i * 4])
+            + hamming_distance(&bytes[i..i * 2], &bytes[i * 2..i * 3])
+            + hamming_distance(&bytes[i..i * 2], &bytes[i * 3..i * 4])
+            + hamming_distance(&bytes[i * 2..i * 3], &bytes[i * 3..i * 4]))
             as f64
             / (i as f64 * 6.0);
 
@@ -95,7 +93,7 @@ mod tests {
     #[test]
     fn check_hamming_distance() {
         assert_eq!(
-            hamming_distance(b"this is a test", b"wokka wokka!!!").unwrap(),
+            hamming_distance(b"this is a test", b"wokka wokka!!!"),
             37
         );
     }

@@ -3,6 +3,7 @@ use std::time;
 
 use rand::{thread_rng, Rng};
 
+use cryptopals::bytes::xor;
 use cryptopals::mac::hmac_sha1;
 
 #[test]
@@ -81,11 +82,10 @@ fn challenge_twenty_seven() {
     // since plaintext[0] = decrypt(ciphertext[0]) ^ key,
     // and plaintext[2] = decrypt(ciphertext[0])
     // plaintext[0] ^ plaintext[2] == key
-    let found_key = craes::xor(
+    let found_key = xor(
         &plaintext[..BLOCK_LEN],
         &plaintext[BLOCK_LEN * 2..BLOCK_LEN * 3],
-    )
-    .unwrap();
+    );
 
     assert_eq!(found_key.as_slice(), output.key.as_ref());
 }

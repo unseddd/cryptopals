@@ -175,35 +175,6 @@ fn base64_len(len: usize) -> usize {
     num_groups * 4
 }
 
-/// XOR fixed-length byte slices
-///
-/// errors: returns Error on unequal lengths
-pub fn xor(left: &[u8], right: &[u8]) -> Result<Vec<u8>, Error> {
-    let left_len = left.len();
-    let right_len = right.len();
-    if left_len != right_len {
-        return Err(Error::XORLength);
-    }
-    let mut res: Vec<u8> = Vec::with_capacity(left_len);
-    for (&i, &j) in left.iter().zip(right.iter()) {
-        res.push(i ^ j);
-    }
-    Ok(res)
-}
-
-/// XOR fixed-length byte slices
-///
-/// errors: returns Error on unequal lengths
-pub fn xor_equals(left: &mut [u8], right: &[u8]) -> Result<(), Error> {
-    if left.len() != right.len() {
-        return Err(Error::XORLength);
-    }
-    for (i, j) in left.iter_mut().zip(right.iter()) {
-        *i ^= *j;
-    }
-    Ok(())
-}
-
 /// XOR a byte slice with a key byte
 ///
 /// errors: returns Error on empty byte slice

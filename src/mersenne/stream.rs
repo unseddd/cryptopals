@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use craes::xor_equals;
+use crate::bytes::xor_assign;
 
 use super::mt19937::*;
 
@@ -52,7 +52,7 @@ impl Cipher {
 
         for block in text.chunks(BLOCK_LEN) {
             let mut keystream = rng.extract_number().to_le_bytes();
-            xor_equals(&mut keystream[..block.len()], block).unwrap();
+            xor_assign(&mut keystream[..block.len()], block);
             res.extend_from_slice(&keystream[..block.len()]);
         }
 

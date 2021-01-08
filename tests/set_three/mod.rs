@@ -2,6 +2,7 @@ use std::io::Write;
 
 use craes::ctr;
 
+use cryptopals::bytes::xor;
 use cryptopals::encoding::from_base64;
 use cryptopals::oracle;
 
@@ -47,7 +48,7 @@ fn decrypt_ctr_ciphertexts(ciphertexts: &Vec<Vec<u8>>, xor_blocks: &Vec<Vec<u8>>
 
     let mut out = std::fs::File::create(file_name).unwrap();
     for ciphertext in ciphertexts.iter() {
-        let msg = craes::xor(&ciphertext, &key[..ciphertext.len()]).unwrap();
+        let msg = xor(&ciphertext, &key[..ciphertext.len()]);
         out.write_all(&msg).unwrap();
         out.write_all(&[0x0a]).unwrap();
     }
@@ -293,7 +294,7 @@ fn challenge_twenty_four_a() {
 
     // Sanity check to ensure the first generator output is recovered accurately
     for (plaintext, ciphertext) in plaintexts.iter().zip(ciphertexts.iter()) {
-        let recovered_plaintext = craes::xor(&ciphertext, &keystream[..ciphertext.len()]).unwrap();
+        let recovered_plaintext = xor(&ciphertext, &keystream[..ciphertext.len()]);
         assert_eq!(recovered_plaintext[..4], plaintext[..4]);
     }
 
