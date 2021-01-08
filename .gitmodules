@@ -1,0 +1,15 @@
+[submodule "bmd4"]
+	path = bmd4
+	url = /home/user/cryptopals/bmd4
+
+[submodule "craes"]
+	path = craes
+	url = /home/user/cryptopals/craes
+
+[submodule "irsa"]
+	path = irsa
+	url = /home/user/cryptopals/irsa
+
+[submodule "isha1"]
+	path = isha1
+	url = /home/user/cryptopals/isha1
