@@ -1,3 +1,6 @@
+/// CBC-MAC based MAC tools
+pub mod cbc;
+
 /// SHA-1 based MAC tools
 mod sha1;
 
