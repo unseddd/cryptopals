@@ -47,7 +47,7 @@ pub fn from_hex_bytes(hex: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(res)
 }
 
-const BASE64_ALPHABET: &[u8; 64] =
+pub const BASE64_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 //const BASE64URL_ALPHABET: [u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 

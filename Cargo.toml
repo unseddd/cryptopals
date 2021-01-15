@@ -20,3 +20,4 @@ rand = "0.7"
 
 [dev-dependencies]
 prime-math = { git = "https://github.com/unseddd/prime-math.git", branch = "main" }
+lzma-rs = "0.1.3"
