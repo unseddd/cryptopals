@@ -1,4 +1,5 @@
 use cryptopals::bytes::{xor, xor_assign};
+use cryptopals::encoding::from_hex_bytes;
 use cryptopals::mac::cbc::{CbcMac, CbcMacServer, MAC_LEN};
 
 #[test]
@@ -116,4 +117,36 @@ fn challenge_forty_nine_b() {
 
     mac_server.process_multi_transfer(&forged_msg).unwrap();
     assert_eq!(mac_server.get_balance(attack_uid).unwrap(), 1_000_000);
+}
+
+#[test]
+fn challenge_fifty() {
+    let script = b"alert('MZA who was that?');\n";
+    let exp_mac = from_hex_bytes(b"296b8d7cb78a243dda4d0a61d33bbdd1").unwrap();
+    let cbcmac = CbcMac::new(*b"YELLOW SUBMARINE", [0; craes::cbc::IV_LEN]);
+    let mac = cbcmac.mac(script.as_ref()).unwrap();
+
+    assert_eq!(mac[..], exp_mac[..]);
+
+    let forge_script = b"alert('Ayo, the Wu is back!');\n";
+
+    // oops, they leaked the key! now, we can create a collision
+    let forge_mac = cbcmac.mac(forge_script.as_ref()).unwrap();
+
+    // Calculate PKCS#7 padding
+    let pad_len = craes::aes::BLOCK_LEN - (forge_script.len() % craes::aes::BLOCK_LEN);
+    let pad = vec![pad_len as u8; pad_len];
+
+    // add PKCS#7 padding to the forged script
+    let mut full_script = forge_script.to_vec();
+    full_script.extend_from_slice(pad.as_slice());
+    // xor the CBC-MAC of our forged script with the first block of the original script
+    let forge_block = xor(&script[..MAC_LEN], forge_mac.as_ref());
+    // append to the forged script and padding
+    full_script.extend_from_slice(forge_block.as_slice());
+    // add the rest of the original script to calculate the CBC-MAC
+    full_script.extend_from_slice(&script[MAC_LEN..]);
+    let mac_collision = cbcmac.mac(full_script.as_slice()).unwrap();
+
+    assert_eq!(mac_collision, mac);
 }

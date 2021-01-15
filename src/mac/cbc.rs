@@ -26,9 +26,15 @@ pub const MAC_LEN: usize = craes::aes::BLOCK_LEN;
 pub const CBC_SNG_XFER_MSG_LEN: usize = 29 + IV_MAC_LEN;
 
 impl CbcMac {
-    /// Create a new CBC Mac from a given key and IV
+    /// Create a new CbcMac from a given key and IV
     pub fn new(key: [u8; craes::aes::KEY_LEN_128], iv: [u8; craes::cbc::IV_LEN]) -> Self {
         Self { key: key, iv: iv }
+    }
+
+    /// Calculate the CBC-MAC of a given message
+    pub fn mac(&self, msg: &[u8]) -> Result<[u8; MAC_LEN], Error> {
+        let c = craes::cbc::encrypt(&craes::pkcs7::pad(msg), &self.key, &self.iv).map_err(|_| Error::Invalid)?;
+        Ok(c[c.len()-MAC_LEN..].try_into().unwrap())
     }
 
     /// Sign a given message using CBC-MAC w/ IV according to Cryptopals #49
@@ -36,12 +42,12 @@ impl CbcMac {
     /// No input validation done, in the real world you would want to
     ///       since this is just for the challenge, assume input valid
     pub fn sign_with_iv(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        let c = craes::cbc::encrypt(&craes::pkcs7::pad(msg), &self.key, &self.iv).map_err(|_| Error::Invalid)?;
+        let mac = self.mac(msg)?;
         let mut res = msg.to_vec();
         // add the IV, per the first half of Cryptopals #49
         res.extend_from_slice(&self.iv);
         // add the CBC-MAC, the last block of the CBC encrypted message
-        res.extend_from_slice(&c[c.len() - MAC_LEN..]);
+        res.extend_from_slice(mac.as_ref());
         Ok(res)
     }
 
@@ -50,10 +56,10 @@ impl CbcMac {
     /// No input validation done, in the real world you would want to
     ///       since this is just for the challenge, assume input valid
     pub fn sign_fixed_iv(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        let c = craes::cbc::encrypt(&craes::pkcs7::pad(msg), &self.key, &self.iv).map_err(|_| Error::Invalid)?;
+        let mac = self.mac(msg)?;
         let mut res = msg.to_vec();
         // add the CBC-MAC, the last block of the CBC encrypted message
-        res.extend_from_slice(&c[c.len() - MAC_LEN..]);
+        res.extend_from_slice(mac.as_ref());
         Ok(res)
     }
 
