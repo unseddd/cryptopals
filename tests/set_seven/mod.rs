@@ -1,5 +1,6 @@
 use rand::{thread_rng, Rng};
 
+use cryptopals::bad_hash;
 use cryptopals::bytes::{xor, xor_assign};
 use cryptopals::encoding::from_hex_bytes;
 use cryptopals::mac::cbc::{CbcMac, CbcMacServer, MAC_LEN};
@@ -262,4 +263,235 @@ fn challenge_fifty_one() {
     attempt[18 + 43] = 0x3d;
 
     assert_eq!(attempt[18..], target[..]);
+}
+
+fn find_collision(collisions: &[u32], attempt: u32) -> bool {
+    for &collision in collisions.iter() {
+        if collision == attempt {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn challenge_fifty_two() {
+    let mut rng = thread_rng();
+
+    // generate initial collisions
+    let initial_attempts = 128;
+    let collisions = bad_hash::find_collisions(initial_attempts, &mut rng).unwrap();
+    // ensure all collision messages actually collide to the same digest
+    for (el_collision, ar_collision, digest) in collisions.iter() {
+        let mut hash = bad_hash::BadHash::new();
+        hash.input(el_collision).unwrap();
+        let el_digest = hash.finalize();
+        hash.input(ar_collision).unwrap();
+        let ar_digest = hash.finalize();
+
+        assert_eq!(el_digest, ar_digest);
+        assert_eq!(el_digest, *digest);
+    }
+
+    let digest = collisions[0].2;
+
+    let mut less_hash = bad_hash::LessBadHash::new();
+    less_hash.input(&collisions[0].0).unwrap();
+    let digest_32 = less_hash.finalize();
+
+    let mut less_collisions: Vec<u32> = Vec::new();
+    let mut total_attempts = 0;
+    let mut attempt = 0;
+
+    // try to find a colliding message for LessBadHash in the initial set
+    for (_, collision, _) in collisions.iter() {
+        total_attempts += 1;
+        less_hash.input(collision).unwrap();
+        attempt = less_hash.finalize();
+        // check if the message collides with the LessBadHash digest of the original
+        // message, or a LessBadHash digest of a BadHash colliding message
+        //
+        // FIXME: is this check too permissive?
+        if attempt == digest_32 || find_collision(&less_collisions, attempt) {
+            break;
+        } else {
+            less_collisions.push(attempt);
+        }
+    }
+
+    if attempt != digest_32 && !find_collision(&less_collisions, attempt) {
+        let domain = u16::MAX as u128;
+        println!(
+            "no collisions found in first n attempts: {}",
+            total_attempts
+        );
+        let mut next = u128::from_be_bytes(collisions.last().unwrap().1) + 1;
+
+        // generate more "cheap" collisions, and check if they collide in LessBadHash
+        loop {
+            total_attempts += 1;
+            let collision = bad_hash::find_collision_with_digest(next, digest).unwrap();
+            less_hash.input(&collision).unwrap();
+            attempt = less_hash.finalize();
+            println!(
+                "n: {}, msg: {}, attempt: {}, target: {}",
+                total_attempts, next, attempt, digest
+            );
+            // check if the message collides with the LessBadHash digest of the original
+            // message, or a LessBadHash digest of a BadHash colliding message
+            //
+            // FIXME: is this check too permissive?
+            if attempt == digest_32 || find_collision(&less_collisions, attempt) {
+                break;
+            }
+            less_collisions.push(attempt);
+            next += domain - (u128::from_be_bytes(collision) % domain);
+        }
+    }
+
+    println!(
+        "total attempts: {}, collision: {}, short collision: {}",
+        total_attempts, attempt, digest_32
+    );
+    assert!(attempt == digest_32 || find_collision(&less_collisions, attempt));
+}
+
+#[test]
+fn challenge_fifty_three() {
+    let k = 8;
+    // 2**8 * 16 = 2**8 BadHash-blocks
+    let m = [0x42; 4096];
+
+    let rand_block = [0x69; bad_hash::BLOCK_LEN];
+    let expandable_msg = bad_hash::generate_expandable_message(k, &rand_block);
+    let intermediate_states = bad_hash::map_intermediate_states(&m);
+
+    let mut forged = Vec::with_capacity(m.len());
+
+    // generate the prefix:
+    // 12 = 1 + 1 + 1 + 1 + 1 + 1 + 1 + (2**1 + 1) + (2**0 + 1)
+    forged.extend_from_slice(&rand_block);
+    forged.extend_from_slice(&rand_block);
+    forged.extend_from_slice(&rand_block);
+    forged.extend_from_slice(&rand_block);
+    forged.extend_from_slice(&rand_block);
+    forged.extend_from_slice(&rand_block);
+    forged.extend_from_slice(&rand_block);
+    forged.extend_from_slice(&expandable_msg[6].0);
+    forged.extend_from_slice(&expandable_msg[7].0);
+
+    let mut f_sha = bad_hash::BadHash::new();
+    f_sha.input(&forged).unwrap();
+    let f_state = f_sha.state();
+    let mut bridge = [0_u8; bad_hash::BLOCK_LEN];
+    let target = intermediate_states[12];
+
+    // find a bridge block to connect the output state of the prefix
+    // to the input state of the tail of the message
+    let mut rng = thread_rng();
+    loop {
+        rng.fill(&mut bridge);
+        let mut ex_sha = bad_hash::BadHash::from_digest(f_state);
+        ex_sha.input(bridge.as_ref()).unwrap();
+        if ex_sha.state() == target {
+            break;
+        }
+    }
+
+    // add the "bridge" block
+    forged.extend_from_slice(&bridge);
+
+    // add the rest of the original message
+    forged.extend_from_slice(&m[13 * bad_hash::BLOCK_LEN..]);
+
+    assert_eq!(forged.len(), m.len());
+
+    // check that the forged hash matches the target hash
+    let forged_hash = bad_hash::BadHash::digest(&forged).unwrap();
+    let target_hash = bad_hash::BadHash::digest(&m).unwrap();
+
+    assert_eq!(forged_hash, target_hash);
+}
+
+#[test]
+fn challenge_fifty_four() {
+    // we'll be generating a 2**k tree of collisions up-front
+    // leaving only 2**(b-k) = 2**(16-7) = 2**9 work on the backend
+    // FIXME: this test doesn't seem to take 2**(b-k) backend work
+    //        am I fucking something up?
+    let k = 7;
+    let tree = bad_hash::generate_initial_tree(k);
+    assert_eq!(tree.len(), k);
+
+    // check that the tree was generated correctly
+    for (i, branch) in tree.iter().enumerate() {
+        let exp_len = 2_usize.pow((k - i - 1) as u32);
+        assert_eq!(branch.len(), exp_len);
+
+        for leaf in branch.iter() {
+            let bad_hash::BadHashCollision {
+                state_one,
+                state_two,
+                block,
+                collision,
+            } = leaf;
+            let mut s1_hash = bad_hash::BadHash::from_digest(*state_one);
+            let mut s2_hash = bad_hash::BadHash::from_digest(*state_two);
+            s1_hash.input(block.as_ref()).unwrap();
+            s2_hash.input(block.as_ref()).unwrap();
+            let s1_dig = s1_hash.finalize();
+            let s2_dig = s2_hash.finalize();
+            assert_eq!(s1_dig, s2_dig);
+            assert_eq!(s1_dig, *collision);
+        }
+    }
+
+    // generate the prediction by hashing an empty block using the final tree state
+    let final_state = tree.last().unwrap()[0].state_one;
+    let final_block = tree.last().unwrap()[0].block;
+    let mut final_hash = bad_hash::BadHash::from_digest(final_state);
+
+    let msg_len = (2_u64.pow(bad_hash::BLOCK_LEN as u32) - 1) * bad_hash::BLOCK_LEN as u64;
+    let total_len = (msg_len + (bad_hash::BLOCK_LEN * 2) as u64) * 8;
+
+    final_hash.input(final_block.as_ref()).unwrap();
+    let prediction = final_hash.finalize_insecure(total_len);
+
+    let mut msg: Vec<u8> = Vec::with_capacity(msg_len as usize);
+    msg.resize(msg_len as usize, 0);
+
+    let mut rng = thread_rng();
+    rng.fill(msg.as_mut_slice());
+
+    let mut msg_hash = bad_hash::BadHash::new();
+    msg_hash.input(&msg).unwrap();
+    let msg_state = msg_hash.state();
+
+    let mut glue = [0_u8; bad_hash::BLOCK_LEN];
+    let mut attempt = 0_usize;
+    loop {
+        rng.fill(&mut glue);
+        let mut glue_hash = bad_hash::BadHash::from_digest(msg_state);
+        glue_hash.input(glue.as_ref()).unwrap();
+        println!(
+            "attempt: {}, glue state: {}, final state: {}",
+            attempt,
+            glue_hash.state(),
+            final_state
+        );
+        if glue_hash.state() == final_state {
+            break;
+        };
+        attempt += 1;
+    }
+
+    // add the glue block to the hashed message
+    msg_hash.input(glue.as_ref()).unwrap();
+    msg_hash.input(final_block.as_ref()).unwrap();
+
+    assert_eq!(total_len, msg_hash.total_len());
+
+    let msg_digest = msg_hash.finalize();
+
+    assert_eq!(msg_digest, prediction);
 }

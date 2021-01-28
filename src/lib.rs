@@ -2,6 +2,9 @@
 
 extern crate alloc;
 
+/// BadHash Merkle-Damgaard algorithm for Cryptopals #52
+pub mod bad_hash;
+
 /// Utilities for manipulating bytes
 pub mod bytes;
 
