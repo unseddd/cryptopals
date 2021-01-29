@@ -495,3 +495,148 @@ fn challenge_fifty_four() {
 
     assert_eq!(msg_digest, prediction);
 }
+
+// Split MD4 message into 32-bit words
+// Assume message is 64-bytes long, because challenge
+fn split_words(msg: &[u8]) -> [u32; 16] {
+    let mut word = [0_u8; 4];
+    let mut res = [0_u32; 16];
+    for (i, w) in msg.chunks_exact(4).enumerate() {
+        word.copy_from_slice(w);
+        res[i] = u32::from_be_bytes(word);
+    }
+    res
+}
+
+fn from_words(words: &[u32; 16], msg: &mut [u8; 64]) {
+    for (i, word) in words.iter().enumerate() {
+        msg[i*4..(i+1)*4].copy_from_slice(&word.to_be_bytes());
+    }
+}
+
+// Modify a message for corrections in round one
+// "Cryptanalysis of the Hash Functions MD4 and RIPEMD", Ss. 4.2
+fn single_step_mod(words: &mut [u32]) {
+    let init = bmd4::INIT_STATE;
+    let a0 = init[0];
+    let b0 = init[1];
+    let c0 = init[2];
+    let d0 = init[3];
+
+    let a1 = bmd4::Md4::ff(a0, b0, c0, d0, words[0], bmd4::S11);
+    let mut d1 = bmd4::Md4::ff(d0, a1, b0, c0, words[1], bmd4::S12);
+
+    // d1 <- d1 ^ (d1,7 <<< 6) ^ ((d1,8 ^ a1,8) <<< 7) ^ ((d1,11 ^ a1,11) <<< 10)
+    let da8 = ((d1 & (1 << 7)) ^ (a1 & (1 << 7))).rotate_left(7);
+    let da11 = ((d1 & (1 << 10)) ^ (a1 & (1 << 10))).rotate_left(10);
+    d1 = d1 ^ (d1 & 1 << 6).rotate_left(6) ^ da8 ^ da11;
+
+    // m1 <- (d1 >>> 7) - d0 - F(a1, b0, c0)
+    words[1] = d1.rotate_right(7).wrapping_sub(d0).wrapping_sub(bmd4::Md4::f(a1, b0, c0))
+}
+
+fn multi_step_mod(words: &mut [u32]) {
+    let init = bmd4::INIT_STATE;
+    let (mut a, mut b, mut c, mut d) = (init[0], init[1], init[2], init[3]);
+
+    for i in [19, 26, 27, 29, 32].iter() {
+        /* 1 */
+        a = bmd4::Md4::ff(a, b, c, d, words[0], bmd4::S11); /* 1 */
+        d = bmd4::Md4::ff(d, a, b, c, words[1], bmd4::S12); /* 2 */
+        c = bmd4::Md4::ff(c, d, a, b, words[2], bmd4::S13); /* 3 */
+        b = bmd4::Md4::ff(b, c, d, a, words[3], bmd4::S14); /* 4 */
+
+        let (mut a1, b1, c1, d1) = (a, b, c, d);
+
+        /* 2 */
+        a = bmd4::Md4::ff(a, b, c, d, words[4], bmd4::S11); /* 5 */
+        d = bmd4::Md4::ff(d, a, b, c, words[5], bmd4::S12); /* 6 */
+        c = bmd4::Md4::ff(c, d, a, b, words[6], bmd4::S13); /* 7 */
+        b = bmd4::Md4::ff(b, c, d, a, words[7], bmd4::S14); /* 8 */
+
+        let a2 = a;
+
+        /* 3 */
+        a = bmd4::Md4::ff(a, b, c, d, words[8], bmd4::S11); /* 9 */
+        d = bmd4::Md4::ff(d, a, b, c, words[9], bmd4::S12); /* 10 */
+        c = bmd4::Md4::ff(c, d, a, b, words[10], bmd4::S13); /* 11 */
+        b = bmd4::Md4::ff(b, c, d, a, words[11], bmd4::S14); /* 12 */
+
+        /* 4 */
+        a = bmd4::Md4::ff(a, b, c, d, words[12], bmd4::S11); /* 13 */
+        d = bmd4::Md4::ff(d, a, b, c, words[13], bmd4::S12); /* 14 */
+        c = bmd4::Md4::ff(c, d, a, b, words[14], bmd4::S13); /* 15 */
+        b = bmd4::Md4::ff(b, c, d, a, words[15], bmd4::S14); /* 16 */
+
+        /* 5 */
+        a = bmd4::Md4::gg(a, b, c, d, words[0], bmd4::S21); /* 17 */
+
+        let (a5, c4) = ((a & (1 << (i-1))) >> (i-1), (c & (1 << (i-1))) >> (i-1));
+
+        let mut change = false;
+        match (a5, c4) {
+            (0, 1) => {
+                words[0] = words[0].wrapping_add(2_u32.pow(i - 4));
+                a1 ^= 1 << (i - 1);
+                change = true;
+            },
+            (1, 0) => {
+                words[0] = words[0].wrapping_sub(2_u32.pow(i - 4));
+                a1 ^= 1 << (i - 1);
+                change = true;
+            },
+            (0, 0) | (1, 1) => (),
+            _ => (),
+        }
+
+        if change {
+            let (b0, c0, d0) = (init[1], init[2], init[3]);
+            words[1] = d1.rotate_right(7).wrapping_sub(d0).wrapping_sub(bmd4::Md4::f(a1, b0, c0));
+            words[2] = c1.rotate_right(11).wrapping_sub(c0).wrapping_sub(bmd4::Md4::f(d1, a1, b0)); 
+            words[3] = b1.rotate_right(19).wrapping_sub(b0).wrapping_sub(bmd4::Md4::f(c1, d1, a1));
+            words[4] = a2.rotate_right(3).wrapping_sub(a1).wrapping_sub(bmd4::Md4::f(b1, c1, d1));
+        }
+    }
+
+    for i in [26, 27, 29, 32].iter() {
+        words[5] = words[5].wrapping_add(2_u32.pow(i-17));
+        words[8] = words[8].wrapping_sub(2_u32.pow(i-10));
+        words[9] = words[9].wrapping_sub(2_u32.pow(i-10));
+    }
+}
+
+#[test]
+fn challenge_fifty_five() {
+    let mut msg = [0_u8; 64];
+    let mut collision = [0_u8; 64];
+    let mut rng = thread_rng();
+
+    let mut i = 0;
+
+    loop {
+        println!("attempt: {}", i);
+
+        rng.fill(&mut msg);
+
+        let mut words = split_words(&msg);
+
+        // correct message values for a5
+        single_step_mod(&mut words[..2]);
+        multi_step_mod(&mut words);
+
+        from_words(&words, &mut collision);
+
+        let msg_hash = bmd4::Md4::digest(msg.as_ref()).unwrap();
+        let col_hash = bmd4::Md4::digest(collision.as_ref()).unwrap();
+
+        if msg != collision && msg_hash == col_hash { break };
+
+        i += 1;
+    }
+
+    let msg_hash = bmd4::Md4::digest(msg.as_ref()).unwrap();
+    let col_hash = bmd4::Md4::digest(collision.as_ref()).unwrap();
+
+    assert!(msg != collision);
+    assert_eq!(msg_hash, col_hash);
+}
